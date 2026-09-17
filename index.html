@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Cylindrical 3D Ladder (원통형 3D 사다리 게임) - 최초의 공평한 무경계 사다리</title>
-  <meta name="description" content="양 끝이 연결되어 완벽한 공평함을 자랑하는 최초의 원통형 3D 사다리 게임" />
+  <title>Cylinder Ladder 3D - 원통형 3D 사다리 게임</title>
+  <meta name="description" content="360도 원통형 구조로 공평하게 즐기는 3D 사다리 게임" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-  <script type="module" crossorigin src="/Ladder/assets/index-8bO_Wvdo.js"></script>
+  <script type="module" crossorigin src="/Ladder/assets/index-DvtEA6la.js"></script>
   <link rel="stylesheet" crossorigin href="/Ladder/assets/index-Br-e5RFZ.css">
 </head>
 <body>
@@ -23,12 +23,11 @@
         <h1>Cylinder Ladder 3D</h1>
         <span class="badge">100% Fair</span>
       </div>
-      <div class="subtitle">최초의 원통형 무경계 3D 사다리 게임</div>
     </header>
 
     <!-- Floating Interactive Hint -->
     <div class="interactive-hint">
-      💡 <span class="highlight">기둥 사이를 드래그</span>하여 가로/대각선 다리를 연결하세요! 빈 공간을 드래그하면 <span class="highlight">360° 회전</span>합니다.
+      💡 <span class="highlight">기둥 사이를 드래그</span>하여 가로/대각선 다리를 연결하세요! 빈 공간을 드래그하면 <span class="highlight">360° 회전 및 각도 조절</span>이 가능합니다.
     </div>
 
     <!-- Bottom Controls -->
@@ -38,6 +37,9 @@
       </button>
       <button type="button" id="btnModeToggle" class="btn-secondary" title="상단의 구슬을 직접 눌러 하나씩 출발">
         🎯 개별 터치 모드
+      </button>
+      <button type="button" id="btnQuickTopView" class="btn-secondary" title="완전 위에서 내려다보는 탑뷰 / 정면 뷰 전환">
+        📐 탑뷰 전환
       </button>
       <button type="button" id="btnReset" class="btn-sub" title="처음 위치로 되돌리기">
         🔄 다시하기
@@ -103,7 +105,9 @@
           <button type="button" id="btnRandomize" title="새로운 무작위 다리 생성">🎲 랜덤 생성</button>
           <button type="button" id="btnClearBridges" title="모든 가로선 지우기">🧹 다리 비우기</button>
           <button type="button" id="btnToggleEdit" class="active" title="드래그 다리 그리기 활성/비활성">✏️ 그리기: ON</button>
-          <button type="button" id="btnSound" title="효과음 켜기/끄기">🔊 사운드 ON</button>
+          <button type="button" id="btnSound" title="효과음 켜기/끄기">🔊 효과음 ON</button>
+          <button type="button" id="btnBgm" class="active" title="유튜브 배경음악 켜기/끄기">🎵 BGM ON</button>
+          <button type="button" id="btnToggleView" title="정면 뷰 / 완전 탑뷰 전환">📐 뷰: 정면</button>
         </div>
       </div>
     </aside>
@@ -122,6 +126,11 @@
           <button type="button" id="btnRestartSame" class="btn-restart">🔄 같은 명단으로 다시하기</button>
         </div>
       </div>
+    </div>
+
+    <!-- YouTube Background Music Player (Hidden) -->
+    <div id="youtube-bgm-wrapper" style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; overflow: hidden; pointer-events: none; opacity: 0.001; z-index: -999;">
+      <div id="youtube-bgm-player"></div>
     </div>
   </div>
 
