@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cylindrical 3D Ladder (원통형 3D 사다리 게임) - 최초의 공평한 무경계 사다리</title>
+  <meta name="description" content="양 끝이 연결되어 완벽한 공평함을 자랑하는 최초의 원통형 3D 사다리 게임" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <script type="module" crossorigin src="/Ladder/assets/index-DAKiJPOb.js"></script>
+  <link rel="stylesheet" crossorigin href="/Ladder/assets/index-C8zXwemL.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 3D Canvas -->
+    <div id="canvas-container">
+      <canvas id="three-canvas"></canvas>
+    </div>
+
+    <!-- Header -->
+    <header class="top-header">
+      <div class="title-group">
+        <h1>Cylinder Ladder 3D</h1>
+        <span class="badge">100% Fair</span>
+      </div>
+      <div class="subtitle">최초의 원통형 무경계 3D 사다리 게임</div>
+    </header>
+
+    <!-- Floating Interactive Hint -->
+    <div class="interactive-hint">
+      💡 <span class="highlight">기둥 사이를 드래그</span>하여 가로/대각선 다리를 연결하세요! 빈 공간을 드래그하면 <span class="highlight">360° 회전</span>합니다.
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="bottom-controls">
+      <button type="button" id="btnStartSimul" class="btn-primary" title="모든 참가자 마블 동시 출발">
+        🚀 전체 동시 출발
+      </button>
+      <button type="button" id="btnModeToggle" class="btn-secondary" title="상단의 구슬을 직접 눌러 하나씩 출발">
+        🎯 개별 터치 모드
+      </button>
+      <button type="button" id="btnReset" class="btn-sub" title="처음 위치로 되돌리기">
+        🔄 다시하기
+      </button>
+    </div>
+
+    <!-- Mobile Sidebar Toggle -->
+    <button type="button" id="btnToggleSidebar" class="btn-toggle-sidebar" title="설정 메뉴 열기">☰</button>
+
+    <!-- Sidebar Settings -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>⚙️ 사다리 설정</h2>
+      </div>
+      <div class="sidebar-content">
+        <!-- 1. 참가자 명단 -->
+        <div class="panel-box">
+          <div class="box-header">
+            <label for="in_names">👥 참가자 명단</label>
+            <div class="preset-row">
+              <select id="sltPreset" title="프리셋 선택"></select>
+              <button type="button" id="btnSavePreset" class="btn-xs" title="현재 명단 저장">저장</button>
+              <button type="button" id="btnDeletePreset" class="btn-xs btn-del" title="선택 프리셋 삭제">삭제</button>
+            </div>
+          </div>
+          <textarea id="in_names" placeholder="쉼표(,) 또는 줄바꿈으로 구분">철수, 영희, 민수, 지우, 수빈, 동현</textarea>
+        </div>
+
+        <!-- 2. 당첨/결과 항목 -->
+        <div class="panel-box">
+          <div class="box-header">
+            <label for="in_goals">🎯 당첨/결과 항목</label>
+          </div>
+          <textarea id="in_goals" placeholder="각 기둥 하단에 배정될 결과 (쉼표 또는 줄바꿈)">짜장면, 김치찌개, 돈까스, 햄버거, 쌀국수, 초밥</textarea>
+        </div>
+
+        <!-- 3. 사다리 밀도 및 속도 -->
+        <div class="panel-box">
+          <div class="box-header">
+            <label for="sliderDensity">🎲 다리 밀도 (개수)</label>
+          </div>
+          <div class="range-row">
+            <span>적음</span>
+            <input type="range" id="sliderDensity" min="2" max="6" step="0.5" value="3.5" />
+            <span>많음</span>
+          </div>
+        </div>
+
+        <div class="panel-box">
+          <div class="box-header">
+            <label>⚡ 진행 속도</label>
+          </div>
+          <div class="tools-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <button type="button" class="btn-speed active" data-speed="1.0">1x</button>
+            <button type="button" class="btn-speed" data-speed="2.0">2x</button>
+            <button type="button" class="btn-speed" data-speed="3.5">3.5x</button>
+          </div>
+        </div>
+
+        <!-- 4. 도구 버튼 -->
+        <div class="tools-grid">
+          <button type="button" id="btnRandomize" title="새로운 무작위 다리 생성">🎲 랜덤 생성</button>
+          <button type="button" id="btnClearBridges" title="모든 가로선 지우기">🧹 다리 비우기</button>
+          <button type="button" id="btnToggleEdit" class="active" title="드래그 다리 그리기 활성/비활성">✏️ 그리기: ON</button>
+          <button type="button" id="btnSound" title="효과음 켜기/끄기">🔊 사운드 ON</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Result Modal -->
+    <div id="resultModal" class="result-modal hide">
+      <div class="result-modal-content">
+        <div class="modal-header">
+          <h3>🏆 사다리 추첨 결과</h3>
+          <button type="button" id="btnCloseModal" class="btn-close" title="닫기">&times;</button>
+        </div>
+        <div id="resultList" class="modal-body"></div>
+        <div class="modal-actions">
+          <button type="button" id="btnCopyResult" class="btn-copy">📋 결과 텍스트 복사</button>
+          <button type="button" id="btnNextRoundExclude" class="btn-exclude">⏭️ 당첨자 제외하고 다음 판 (서바이벌)</button>
+          <button type="button" id="btnRestartSame" class="btn-restart">🔄 같은 명단으로 다시하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
