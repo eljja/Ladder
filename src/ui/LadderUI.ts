@@ -254,7 +254,7 @@ export class LadderUI {
       this.showToast('🎲 새로운 랜덤 사다리가 생성되었습니다!');
     });
 
-    // 8-1. 원근 / 하단 크기 조절 슬라이더
+    // 8-1. 원근 / 하단 크기 조절 슬라이더 (0.2x ~ 1.0x)
     this.sliderTaper?.addEventListener('input', () => {
       const val = parseFloat(this.sliderTaper.value);
       this.ladder.setTaperRatio(val);
@@ -263,10 +263,8 @@ export class LadderUI {
       let desc = '';
       if (Math.abs(val - 1.0) < 0.02) {
         desc = '1.00x (기본 원통형)';
-      } else if (val < 0.98) {
-        desc = `${val.toFixed(2)}x (원뿔형: 아래 좁아짐)`;
       } else {
-        desc = `${val.toFixed(2)}x (역원뿔형: 아래 넓어짐)`;
+        desc = `${val.toFixed(2)}x (원뿔형: 아래 좁아짐)`;
       }
       if (this.valTaper) {
         this.valTaper.textContent = desc;
