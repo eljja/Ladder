@@ -45,10 +45,12 @@ export class CylinderLadder {
   }
 
   /**
-   * 다리 추가
+   * 다리 추가 가능 여부 및 충돌 사유 검사 (null이면 추가 가능)
    */
-  public addBridge(fromCol: number, toCol: number, fromY: number, toY: number): LadderBridge | null {
-    if (!this.isAdjacent(fromCol, toCol)) return null;
+  public checkBridgeConflict(fromCol: number, toCol: number, fromY: number, toY: number): string | null {
+    if (!this.isAdjacent(fromCol, toCol)) {
+      return '인접한 기둥끼리만 연결할 수 있습니다.';
+    }
 
     // Y 범위 클리핑
     const minY = 0.8;
@@ -56,20 +58,40 @@ export class CylinderLadder {
     const clampedFromY = Math.max(minY, Math.min(maxY, fromY));
     const clampedToY = Math.max(minY, Math.min(maxY, toY));
 
-    // 같은 기둥의 너무 가까운 위치에 다리가 이미 있는지 확인 (최소 간격 0.35)
-    const minGap = 0.35;
+    // 같은 기둥의 너무 가까운 위치에 다리가 이미 있는지 확인 (최소 간격 0.25)
+    const minGap = 0.25;
     const conflictFrom = this.bridges.some(
       (b) =>
         (b.fromCol === fromCol && Math.abs(b.fromY - clampedFromY) < minGap) ||
         (b.toCol === fromCol && Math.abs(b.toY - clampedFromY) < minGap)
     );
+    if (conflictFrom) {
+      return '시작 위치 근처에 이미 연결된 다리가 있습니다.';
+    }
+
     const conflictTo = this.bridges.some(
       (b) =>
         (b.fromCol === toCol && Math.abs(b.fromY - clampedToY) < minGap) ||
         (b.toCol === toCol && Math.abs(b.toY - clampedToY) < minGap)
     );
+    if (conflictTo) {
+      return '도착 위치 근처에 이미 연결된 다리가 있습니다.';
+    }
 
-    if (conflictFrom || conflictTo) return null;
+    return null;
+  }
+
+  /**
+   * 다리 추가
+   */
+  public addBridge(fromCol: number, toCol: number, fromY: number, toY: number): LadderBridge | null {
+    const conflict = this.checkBridgeConflict(fromCol, toCol, fromY, toY);
+    if (conflict) return null;
+
+    const minY = 0.8;
+    const maxY = this.height - 0.8;
+    const clampedFromY = Math.max(minY, Math.min(maxY, fromY));
+    const clampedToY = Math.max(minY, Math.min(maxY, toY));
 
     const isDiagonal = Math.abs(clampedFromY - clampedToY) > 0.15;
     const bridge: LadderBridge = {

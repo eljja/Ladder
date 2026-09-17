@@ -66,6 +66,7 @@ export class LadderUI {
     this.ladder = ladder;
     this.runner = runner;
     this.scene = scene;
+    this.scene.onToast = (msg: string) => this.showToast(msg);
 
     this.initElements();
     this.initPresets();

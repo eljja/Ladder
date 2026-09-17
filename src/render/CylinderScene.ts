@@ -17,8 +17,10 @@ export class CylinderScene {
   private marbleMeshes: Map<number, MarbleMesh> = new Map();
   private bridgeMeshes: Map<string, THREE.Mesh> = new Map();
   private railMeshes: THREE.Mesh[] = [];
+  private railHitMeshes: THREE.Mesh[] = [];
   private goalSprites: THREE.Sprite[] = [];
   private coreMesh: THREE.Mesh | null = null;
+  public onToast?: (msg: string) => void;
 
   // 드래그로 다리 그리기 상태
   public isEditMode: boolean = true;
@@ -137,6 +139,13 @@ export class CylinderScene {
     });
     this.railMeshes = [];
 
+    this.railHitMeshes.forEach((m) => {
+      this.cylinderGroup.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    });
+    this.railHitMeshes = [];
+
     // 기존 중심 코어 정리
     if (this.coreMesh) {
       this.cylinderGroup.remove(this.coreMesh);
@@ -170,6 +179,7 @@ export class CylinderScene {
       const x = R * Math.sin(angle);
       const z = R * Math.cos(angle);
 
+      // (1) 시각적 얇은 네온 레일 (반지름 0.065)
       const railGeom = new THREE.CylinderGeometry(0.065, 0.065, H, 16);
       const railMat = new THREE.MeshStandardMaterial({
         color: 0x38bdf8,
@@ -184,6 +194,19 @@ export class CylinderScene {
       rail.userData = { isRail: true, colIndex: i };
       this.cylinderGroup.add(rail);
       this.railMeshes.push(rail);
+
+      // (2) 마우스/터치 판정용 와이드 투명 히트 실린더 (반지름 0.32: 화면상 20~25px의 넉넉한 터치 영역)
+      const hitGeom = new THREE.CylinderGeometry(0.32, 0.32, H, 12);
+      const hitMat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const hitProxy = new THREE.Mesh(hitGeom, hitMat);
+      hitProxy.position.set(x, 0, z);
+      hitProxy.userData = { isRail: true, colIndex: i };
+      this.cylinderGroup.add(hitProxy);
+      this.railHitMeshes.push(hitProxy);
     }
 
     // 3. 상단 및 하단 네온 링 장식
@@ -229,7 +252,11 @@ export class CylinderScene {
   /**
    * 단일 다리 3D 곡면 튜브 생성 (원통 둘레 호를 따라 매끄럽게 연결)
    */
-  private createBridgeMesh(bridge: LadderBridge, isPreview: boolean = false): THREE.Mesh {
+  private createBridgeMesh(
+    bridge: LadderBridge,
+    isPreview: boolean = false,
+    isValid: boolean = true
+  ): THREE.Mesh {
     const N = this.ladder.colCount;
     const R = this.ladder.radius;
     const H = this.ladder.height;
@@ -259,11 +286,14 @@ export class CylinderScene {
     const curve = new THREE.CatmullRomCurve3(points);
     const tubeGeom = new THREE.TubeGeometry(curve, 16, isPreview ? 0.08 : 0.06, 8, false);
 
-    const color = isPreview
-      ? 0xffd700
-      : bridge.isDiagonal
+    let color: number;
+    if (isPreview) {
+      color = isValid ? 0xffd700 : 0xff3366; // 유효: 밝은 골드, 충돌/불가: 네온 레드
+    } else {
+      color = bridge.isDiagonal
         ? 0xff007f // 대각선 다리: 핫핑크
         : 0x00ffcc; // 수평 다리: 네온 민트
+    }
 
     const tubeMat = new THREE.MeshStandardMaterial({
       color,
@@ -429,19 +459,26 @@ export class CylinderScene {
 
         // 드래그 방향에 따라 좌측 또는 우측 인접 기둥 선택
         let targetCol = dx < 0 ? leftCol : rightCol;
-        if (railHit && this.ladder.isAdjacent(this.drawStartCol, railHit.colIndex)) {
-          targetCol = railHit.colIndex;
-        }
-
-        // Y 높이: 기둥 히트 시 해당 Y, 아니면 세로 드래그 거리에 비례하여 부드럽게 기울기 반영
         let targetY = this.drawStartY;
+
         if (railHit) {
-          targetY = railHit.ladderY;
+          if (this.ladder.isAdjacent(this.drawStartCol, railHit.colIndex)) {
+            targetCol = railHit.colIndex;
+            targetY = railHit.ladderY;
+          } else if (railHit.colIndex === this.drawStartCol) {
+            const dy = e.clientY - this.drawPointerStartY;
+            targetY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + dy * 0.015));
+          } else {
+            targetY = railHit.ladderY;
+          }
         } else {
           const dy = e.clientY - this.drawPointerStartY;
-          const deltaLadderY = dy * 0.015;
-          targetY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + deltaLadderY));
+          targetY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + dy * 0.015));
         }
+
+        // 충돌 여부 실시간 검사 (유효하면 밝은 골드, 충돌 시 네온 레드)
+        const conflict = this.ladder.checkBridgeConflict(this.drawStartCol, targetCol, this.drawStartY, targetY);
+        const isValid = !conflict;
 
         if (this.previewBridgeMesh) {
           this.cylinderGroup.remove(this.previewBridgeMesh);
@@ -459,7 +496,8 @@ export class CylinderScene {
             toY: targetY,
             isDiagonal: Math.abs(this.drawStartY - targetY) > 0.15,
           },
-          true
+          true,
+          isValid
         );
         this.cylinderGroup.add(this.previewBridgeMesh);
       } else if (this.isDraggingToRotate) {
@@ -501,14 +539,23 @@ export class CylinderScene {
           toY = railHit.ladderY;
         } else {
           const dy = e.clientY - this.drawPointerStartY;
-          const deltaLadderY = dy * 0.015;
-          toY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + deltaLadderY));
+          toY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + dy * 0.015));
         }
 
-        const added = this.ladder.addBridge(this.drawStartCol, toCol, this.drawStartY, toY);
-        if (added) {
-          soundManager.playBridgeAdd();
-          this.rebuildBridges();
+        // 제자리 클릭이거나 드래그 거리가 너무 짧은 경우(15px 미만이고 다른 기둥 미접촉)는 취소로 처리
+        const isDraggedFarEnough = Math.abs(dx) >= 15 || (railHit && railHit.colIndex !== this.drawStartCol);
+
+        if (isDraggedFarEnough) {
+          const conflict = this.ladder.checkBridgeConflict(this.drawStartCol, toCol, this.drawStartY, toY);
+          if (conflict) {
+            this.onToast?.(`⚠️ ${conflict} (살짝 위/아래로 그려보세요)`);
+          } else {
+            const added = this.ladder.addBridge(this.drawStartCol, toCol, this.drawStartY, toY);
+            if (added) {
+              soundManager.playBridgeAdd();
+              this.rebuildBridges();
+            }
+          }
         }
 
         if (this.previewBridgeMesh) {
@@ -550,20 +597,23 @@ export class CylinderScene {
 
   private raycastRail(): { colIndex: number; ladderY: number } | null {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const intersects = this.raycaster.intersectObjects(this.railMeshes);
+    // 와이드 히트 프록시(railHitMeshes)를 대상으로 레이캐스팅하여 넉넉한 터치/클릭 영역 보장
+    const intersects = this.raycaster.intersectObjects(this.railHitMeshes);
 
     if (intersects.length > 0) {
-      // 전면 레일 우선 (월드 좌표계 Z >= -0.5인 앞쪽 레일 선택하여 뒤쪽 오클릭 방지)
+      // 전면 레일 우선 (월드 좌표계 Z >= -0.8인 앞쪽 레일 선택하여 뒤쪽 오클릭 방지)
       const frontHit =
         intersects.find((h) => {
           const wp = new THREE.Vector3();
           h.object.getWorldPosition(wp);
-          return wp.z >= -0.5;
+          return wp.z >= -0.8;
         }) || intersects[0];
 
       const colIndex = frontHit.object.userData.colIndex;
       const H = this.ladder.height;
-      const ladderY = H / 2 - frontHit.point.y;
+      // 실린더 로컬 좌표계로 변환하여 실린더가 어떤 각도로 회전/기울어져 있어도 정확한 높이 산출
+      const localPoint = this.cylinderGroup.worldToLocal(frontHit.point.clone());
+      const ladderY = Math.max(0.8, Math.min(H - 0.8, H / 2 - localPoint.y));
       return { colIndex, ladderY };
     }
     return null;
