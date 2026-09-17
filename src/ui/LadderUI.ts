@@ -1,3 +1,4 @@
+import { bgmManager } from '../core/BgmManager';
 import type { CylinderLadder } from '../core/CylinderLadder';
 import { LadderSolver } from '../core/LadderSolver';
 import type { MarbleRunner } from '../core/MarbleRunner';
@@ -47,6 +48,9 @@ export class LadderUI {
   private btnClearBridges!: HTMLButtonElement;
   private btnToggleEdit!: HTMLButtonElement;
   private btnSound!: HTMLButtonElement;
+  private btnBgm!: HTMLButtonElement;
+  private btnToggleView!: HTMLButtonElement;
+  private btnQuickTopView!: HTMLButtonElement;
   private sliderDensity!: HTMLInputElement;
 
   private resultModal!: HTMLElement;
@@ -78,11 +82,14 @@ export class LadderUI {
 
     this.btnStartSimul = document.querySelector('#btnStartSimul')!;
     this.btnModeToggle = document.querySelector('#btnModeToggle')!;
+    this.btnQuickTopView = document.querySelector('#btnQuickTopView')!;
     this.btnReset = document.querySelector('#btnReset')!;
     this.btnRandomize = document.querySelector('#btnRandomize')!;
     this.btnClearBridges = document.querySelector('#btnClearBridges')!;
     this.btnToggleEdit = document.querySelector('#btnToggleEdit')!;
     this.btnSound = document.querySelector('#btnSound')!;
+    this.btnBgm = document.querySelector('#btnBgm')!;
+    this.btnToggleView = document.querySelector('#btnToggleView')!;
     this.sliderDensity = document.querySelector('#sliderDensity')!;
 
     this.resultModal = document.querySelector('#resultModal')!;
@@ -261,11 +268,37 @@ export class LadderUI {
       );
     });
 
-    // 11. 사운드 음소거 토글
+    // 11. 사운드(SFX) 음소거 토글
     this.btnSound.addEventListener('click', () => {
       soundManager.isMuted = !soundManager.isMuted;
-      this.btnSound.textContent = soundManager.isMuted ? '🔇 음소거' : '🔊 사운드 ON';
+      this.btnSound.textContent = soundManager.isMuted ? '🔇 효과음 OFF' : '🔊 효과음 ON';
+      this.showToast(soundManager.isMuted ? '🔇 효과음 음소거' : '🔊 효과음 켜짐');
     });
+
+    // 11-1. 유튜브 배경음악(BGM) 재생/음소거 토글
+    this.btnBgm?.addEventListener('click', () => {
+      const isPlaying = bgmManager.toggleMute();
+      this.btnBgm.classList.toggle('active', isPlaying);
+      this.btnBgm.textContent = isPlaying ? '🎵 BGM ON' : '🔇 BGM OFF';
+      this.showToast(isPlaying ? '🎵 사다리타기 BGM 재생 중' : '🔇 배경음악 음소거');
+    });
+
+    // 11-2. 시점 모드 (정면 뷰 <-> 완전 탑뷰) 토글
+    const handleViewToggle = () => {
+      const isTop = this.scene.toggleTopView();
+      if (this.btnToggleView) {
+        this.btnToggleView.textContent = isTop ? '📐 뷰: 탑뷰' : '📐 뷰: 정면';
+        this.btnToggleView.classList.toggle('active', isTop);
+      }
+      if (this.btnQuickTopView) {
+        this.btnQuickTopView.textContent = isTop ? '📐 정면뷰 전환' : '📐 탑뷰 전환';
+        this.btnQuickTopView.classList.toggle('active', isTop);
+      }
+      this.showToast(isTop ? '📐 시점: 완전 탑뷰 (위에서 내려다보기)' : '📐 시점: 정면 뷰');
+    };
+
+    this.btnToggleView?.addEventListener('click', handleViewToggle);
+    this.btnQuickTopView?.addEventListener('click', handleViewToggle);
 
     // 12. 골인 이벤트 리스너
     this.runner.addEventListener('marbleGoal', (e: any) => {

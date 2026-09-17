@@ -34,6 +34,10 @@ export class CylinderScene {
   private prevPointerX: number = 0;
   private prevPointerY: number = 0;
 
+  // 시점 모드 (정면 뷰 vs 완전 탑뷰)
+  public isTopView: boolean = false;
+  public targetPitch: number = 0; // X축 목표 회전각 (0 = 정면, Math.PI * 0.485 = 완전 탑뷰)
+
   // 카메라 줌 (처음 시작 시 사다리 전체 높이가 한눈에 보이도록 18.5로 설정)
   private cameraDistance: number = window.innerWidth <= 768 ? 22.0 : 18.5;
 
@@ -41,6 +45,12 @@ export class CylinderScene {
   private pointer: THREE.Vector2 = new THREE.Vector2();
 
   private goalNames: string[] = [];
+
+  public toggleTopView(): boolean {
+    this.isTopView = !this.isTopView;
+    this.targetPitch = this.isTopView ? Math.PI * 0.485 : 0;
+    return this.isTopView;
+  }
 
   constructor(canvas: HTMLCanvasElement, ladder: CylinderLadder, runner: MarbleRunner) {
     this.canvas = canvas;
@@ -398,11 +408,16 @@ export class CylinderScene {
         );
         this.cylinderGroup.add(this.previewBridgeMesh);
       } else if (this.isDraggingToRotate) {
-        // 마우스 드래그로 실린더 수동 회전 (Y축 자전 및 미세한 X축 틸트)
+        // 마우스 드래그로 실린더 수동 회전 (Y축 자전 및 완전 탑뷰까지 X축 틸트 허용)
         const dx = e.clientX - this.prevPointerX;
         const dy = e.clientY - this.prevPointerY;
         this.cylinderGroup.rotation.y += dx * 0.008;
-        this.cylinderGroup.rotation.x = Math.max(-0.4, Math.min(0.4, this.cylinderGroup.rotation.x + dy * 0.005));
+        this.cylinderGroup.rotation.x = Math.max(
+          -Math.PI * 0.49,
+          Math.min(Math.PI * 0.49, this.cylinderGroup.rotation.x + dy * 0.006)
+        );
+        this.targetPitch = this.cylinderGroup.rotation.x;
+        this.isTopView = this.targetPitch > 1.1;
         this.prevPointerX = e.clientX;
         this.prevPointerY = e.clientY;
       }
@@ -568,6 +583,11 @@ export class CylinderScene {
       sprite.material.opacity = 0.45 + 0.55 * t;
     });
 
+    // 목표 피치(정면 0 vs 완전 탑뷰 ~1.52)로 부드럽게 보간
+    if (!this.isDraggingToRotate) {
+      this.cylinderGroup.rotation.x += (this.targetPitch - this.cylinderGroup.rotation.x) * 4.0 * dtSeconds;
+    }
+
     // 경기 진행 중: 1등/활성 마블을 향해 실린더 자전(Y축 회전) 자동 추적
     if (this.runner.isRunning && !this.isDraggingToRotate) {
       const focused = this.runner.getFocusedMarble();
@@ -583,8 +603,8 @@ export class CylinderScene {
         const rotSpeed = 2.6;
         this.cylinderGroup.rotation.y += diff * Math.min(1.0, rotSpeed * dtSeconds);
 
-        // 카메라 수직 시점도 마블의 하강을 부드럽게 추적 (기존 4.0 -> 1.8)
-        const targetCamY = (H / 2 - focused.currentY) * 0.38;
+        // 카메라 수직 시점 추적 (완전 탑뷰일 때는 수직 이동 없이 중앙 유지)
+        const targetCamY = this.isTopView ? 0 : (H / 2 - focused.currentY) * 0.38;
         this.camera.position.y += (targetCamY - this.camera.position.y) * 1.8 * dtSeconds;
 
         // 카메라/시점 이동 중에는 마블 이동 속도를 0.5배속으로 늦춰서 안정적 관람 보장
