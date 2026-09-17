@@ -182,8 +182,16 @@ export class CylinderScene {
     const Rbot = this.ladder.radiusBottom;
     const H = this.ladder.height;
 
-    // 1. 중심 반투명 다크 글래스 코어 (상/하단 테이퍼 반영)
-    const coreGeom = new THREE.CylinderGeometry(Rtop - 0.12, Rbot - 0.12, H + 0.1, 48, 1, true);
+    // 1. 중심 반투명 다크 글래스 코어 (상/하단 테이퍼 반영, 구슬 중심이 선에 위치할 때 구슬 뒤쪽에 자연스럽게 배치)
+    const coreOffset = 0.30;
+    const coreGeom = new THREE.CylinderGeometry(
+      Math.max(0.2, Rtop - coreOffset),
+      Math.max(0.2, Rbot - coreOffset),
+      H + 0.1,
+      48,
+      1,
+      true
+    );
     const coreMat = new THREE.MeshStandardMaterial({
       color: 0x080d16,
       roughness: 0.35,

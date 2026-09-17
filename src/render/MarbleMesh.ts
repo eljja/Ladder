@@ -80,7 +80,7 @@ export class MarbleMesh {
 
   public updateTransform(state: MarbleState, cylinderRadius: number, cylinderHeight: number) {
     const angle = state.currentAngle;
-    const r = cylinderRadius + 0.32; // 실린더 표면에서 살짝 돌출
+    const r = cylinderRadius; // 공의 중심이 선(레일 및 사다리 다리)을 정확히 지나가도록 설정
 
     // Three.js 좌표계: Y가 위쪽
     const x = r * Math.sin(angle);
@@ -90,7 +90,7 @@ export class MarbleMesh {
     this.group.position.set(x, y, z);
 
     // Z축 앞/뒤 깊이에 따른 명암 및 투명도 조절 (앞쪽은 선명하고 밝게, 뒤쪽은 은은하게)
-    const t = Math.max(0, Math.min(1, (z / r + 1) / 2)); // 0 (뒤) ~ 1 (앞)
+    const t = Math.max(0, Math.min(1, (z / Math.max(0.1, r) + 1) / 2)); // 0 (뒤) ~ 1 (앞)
     this.nameSprite.material.opacity = 0.3 + 0.7 * t;
     const mat = this.sphereMesh.material as THREE.MeshStandardMaterial;
     if (mat) {
