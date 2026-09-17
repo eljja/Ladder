@@ -1,7 +1,7 @@
 {
   "name": "ladder",
   "version": "1.0.0",
-  "description": "Cylindrical 3D Ladder Game (원통형 3D 사다리 게임) - 최초의 공평한 3D 사다리",
+  "description": "Cylindrical 3D Ladder Game (원통형 3D 사다리 게임) - 360도 원통 구조의 공평한 3D 사다리",
   "type": "module",
   "scripts": {
     "dev": "vite",
