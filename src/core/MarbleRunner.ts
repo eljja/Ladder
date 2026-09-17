@@ -15,6 +15,7 @@ export interface MarbleState {
   // 다리 건너기 상태
   isTraversingBridge: boolean;
   activeBridge?: LadderBridge;
+  lastBridgeId?: string | null;
   bridgeProgress: number; // 0 ~ 1
   bridgeEnterCol: number;
   bridgeTargetCol: number;
@@ -61,6 +62,7 @@ export class MarbleRunner extends EventTarget {
         isActive: false,
         isFinished: false,
         isTraversingBridge: false,
+        lastBridgeId: null,
         bridgeProgress: 0,
         bridgeEnterCol: col,
         bridgeTargetCol: col,
@@ -84,6 +86,7 @@ export class MarbleRunner extends EventTarget {
       m.currentY = 0;
       m.currentCol = m.startCol;
       m.isTraversingBridge = false;
+      m.lastBridgeId = null;
     });
     this.dispatchEvent(new CustomEvent('start', { detail: { mode: 'simultaneous' } }));
   }
@@ -103,6 +106,7 @@ export class MarbleRunner extends EventTarget {
     target.currentY = 0;
     target.currentCol = target.startCol;
     target.isTraversingBridge = false;
+    target.lastBridgeId = null;
 
     this.dispatchEvent(
       new CustomEvent('start', {
@@ -124,6 +128,7 @@ export class MarbleRunner extends EventTarget {
       m.currentY = 0;
       m.currentCol = m.startCol;
       m.isTraversingBridge = false;
+      m.lastBridgeId = null;
       m.bridgeProgress = 0;
       m.currentAngle = (m.startCol / N) * Math.PI * 2;
     });
@@ -193,15 +198,16 @@ export class MarbleRunner extends EventTarget {
           m.currentY = m.bridgeEnterY + (m.bridgeExitY - m.bridgeEnterY) * m.bridgeProgress;
         }
       } else {
-        // 기둥을 타고 수직 하강 중
+        // 기둥을 타고 수직 하강 중 (이전에 방금 나온 다리는 excludeBridgeId로 전달하여 무한루프 방지)
         m.currentAngle = (m.currentCol / N) * Math.PI * 2;
-        const nextBridge = this.ladder.getNextBridge(m.currentCol, m.currentY);
+        const nextBridge = this.ladder.getNextBridge(m.currentCol, m.currentY, m.lastBridgeId);
 
         if (nextBridge && m.currentY + baseSpeed * dtSeconds >= nextBridge.enterY) {
           // 다리 입구 도달!
           m.currentY = nextBridge.enterY;
           m.isTraversingBridge = true;
           m.activeBridge = nextBridge.bridge;
+          m.lastBridgeId = nextBridge.bridge.id;
           m.bridgeProgress = 0;
           m.bridgeEnterCol = m.currentCol;
           m.bridgeTargetCol = nextBridge.targetCol;
@@ -225,7 +231,14 @@ export class MarbleRunner extends EventTarget {
 
     if (!anyRunning) {
       this.isRunning = false;
-      this.dispatchEvent(new CustomEvent('allFinish'));
+      const allFinished = this.marbles.every((m) => m.isFinished);
+      if (allFinished) {
+        this.dispatchEvent(new CustomEvent('allFinish'));
+      } else if (this.mode === 'individual') {
+        const finished = this.marbles.find((m) => m.id === this.singleActiveId);
+        this.singleActiveId = null;
+        this.dispatchEvent(new CustomEvent('singleFinish', { detail: { marble: finished } }));
+      }
     }
   }
 }

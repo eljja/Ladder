@@ -18,6 +18,7 @@ export class CylinderScene {
   private bridgeMeshes: Map<string, THREE.Mesh> = new Map();
   private railMeshes: THREE.Mesh[] = [];
   private goalSprites: THREE.Sprite[] = [];
+  private coreMesh: THREE.Mesh | null = null;
 
   // 드래그로 다리 그리기 상태
   public isEditMode: boolean = true;
@@ -61,22 +62,23 @@ export class CylinderScene {
     this.camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
     this.camera.position.set(0, 0, this.cameraDistance);
 
-    // 3. 조명 (사이버펑크 네온 앰비언트 + 포인트 라이트)
+    // 3. 조명 (전면 네온 강조 + 후면 은은한 필라이트)
     const ambientLight = new THREE.AmbientLight(0x223344, 1.2);
     this.scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0x00e5ff, 1.5);
-    dirLight1.position.set(5, 10, 8);
+    const dirLight1 = new THREE.DirectionalLight(0x00e5ff, 1.8);
+    dirLight1.position.set(0, 10, 12);
     this.scene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0xff007f, 1.2);
-    dirLight2.position.set(-5, -5, -6);
+    const dirLight2 = new THREE.DirectionalLight(0xff007f, 0.4);
+    dirLight2.position.set(-5, -5, -8);
     this.scene.add(dirLight2);
 
     // 4. 중심 실린더 그룹 (모든 사다리 부속은 이 그룹의 자식)
     this.cylinderGroup = new THREE.Group();
     this.scene.add(this.cylinderGroup);
 
+    this.updateWorkspaceOffset();
     this.buildCylinderStructure();
     this.attachEvents();
   }
@@ -98,11 +100,34 @@ export class CylinderScene {
     });
     this.railMeshes = [];
 
+    // 기존 중심 코어 정리
+    if (this.coreMesh) {
+      this.cylinderGroup.remove(this.coreMesh);
+      this.coreMesh.geometry.dispose();
+      (this.coreMesh.material as THREE.Material).dispose();
+      this.coreMesh = null;
+    }
+
     const N = this.ladder.colCount;
     const R = this.ladder.radius;
     const H = this.ladder.height;
 
-    // 수직 기둥 (Rails) 생성
+    // 1. 중심 반투명 다크 글래스 코어 (앞/뒤 시각적 깊이감 및 원통 차폐 효과)
+    // 앞쪽 레일/다리는 또렷하게, 뒤쪽 레일/다리는 코어를 통과해 자연스럽게 어두워짐
+    const coreGeom = new THREE.CylinderGeometry(R - 0.12, R - 0.12, H + 0.1, 48, 1, true);
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x080d16,
+      roughness: 0.35,
+      metalness: 0.15,
+      transparent: true,
+      opacity: 0.82,
+      side: THREE.DoubleSide,
+    });
+    this.coreMesh = new THREE.Mesh(coreGeom, coreMat);
+    this.coreMesh.position.set(0, 0, 0);
+    this.cylinderGroup.add(this.coreMesh);
+
+    // 2. 수직 기둥 (Rails) 생성
     for (let i = 0; i < N; i++) {
       const angle = (i / N) * Math.PI * 2;
       const x = R * Math.sin(angle);
@@ -124,7 +149,7 @@ export class CylinderScene {
       this.railMeshes.push(rail);
     }
 
-    // 상단 및 하단 네온 링 장식
+    // 3. 상단 및 하단 네온 링 장식
     const ringGeom = new THREE.TorusGeometry(R, 0.08, 16, 64);
     const ringMat = new THREE.MeshStandardMaterial({
       color: 0x00e5ff,
@@ -266,7 +291,7 @@ export class CylinderScene {
     ctx.fillText(display, 128, 40);
 
     const texture = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+    const mat = new THREE.SpriteMaterial({ map: texture, depthTest: true, transparent: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(1.4, 0.44, 1);
     return sprite;
@@ -419,11 +444,17 @@ export class CylinderScene {
     const intersects = this.raycaster.intersectObjects(this.railMeshes);
 
     if (intersects.length > 0) {
-      const hit = intersects[0];
-      const colIndex = hit.object.userData.colIndex;
-      // 3D Y -> Ladder Y 변환
+      // 전면 레일 우선 (월드 좌표계 Z >= -0.5인 앞쪽 레일 선택하여 뒤쪽 오클릭 방지)
+      const frontHit =
+        intersects.find((h) => {
+          const wp = new THREE.Vector3();
+          h.object.getWorldPosition(wp);
+          return wp.z >= -0.5;
+        }) || intersects[0];
+
+      const colIndex = frontHit.object.userData.colIndex;
       const H = this.ladder.height;
-      const ladderY = H / 2 - hit.point.y;
+      const ladderY = H / 2 - frontHit.point.y;
       return { colIndex, ladderY };
     }
     return null;
@@ -434,7 +465,15 @@ export class CylinderScene {
     const meshes = Array.from(this.bridgeMeshes.values());
     const intersects = this.raycaster.intersectObjects(meshes);
     if (intersects.length > 0) {
-      return intersects[0].object.userData.bridgeId || null;
+      // 전면 다리 우선 선택
+      const frontHit =
+        intersects.find((h) => {
+          const wp = new THREE.Vector3();
+          h.object.getWorldPosition(wp);
+          return wp.z >= -0.5;
+        }) || intersects[0];
+
+      return frontHit.object.userData.bridgeId || null;
     }
     return null;
   }
@@ -453,13 +492,33 @@ export class CylinderScene {
     return null;
   }
 
-  public resize() {
+  /**
+   * 왼쪽 화면 영역(사이드바를 제외한 작업공간)에 맞춰 카메라 중심축 보정
+   */
+  public updateWorkspaceOffset() {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     if (w === 0 || h === 0) return;
+
+    const sidebar = document.querySelector('#sidebar');
+    const isDesktop = window.innerWidth > 768;
+    const isSidebarOpen = isDesktop && !sidebar?.classList.contains('collapsed');
+    const sidebarWidth = isSidebarOpen ? 320 : 0;
+
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+
+    if (sidebarWidth > 0) {
+      // 사이드바 너비만큼 가상 화면을 확장하여 3D 원점(0,0,0)을 왼쪽 공간 정중앙에 투영
+      this.camera.setViewOffset(w + sidebarWidth, h, sidebarWidth, 0, w, h);
+    } else {
+      this.camera.clearViewOffset();
+    }
     this.camera.updateProjectionMatrix();
+  }
+
+  public resize() {
+    this.updateWorkspaceOffset();
   }
 
   /**
@@ -467,9 +526,18 @@ export class CylinderScene {
    */
   public update(dtSeconds: number) {
     const H = this.ladder.height;
+    const R = this.ladder.radius;
 
     // 마블 메시 동기화
     this.syncMarbleMeshes();
+
+    // 하단 목적지(골) 스프라이트의 Z축 깊이에 따른 투명도 조절 (앞쪽은 선명, 뒤쪽은 은은하게)
+    this.goalSprites.forEach((sprite) => {
+      const wp = new THREE.Vector3();
+      sprite.getWorldPosition(wp);
+      const t = Math.max(0, Math.min(1, (wp.z / (R + 0.35) + 1) / 2));
+      sprite.material.opacity = 0.25 + 0.75 * t;
+    });
 
     // 경기 진행 중: 1등/활성 마블을 향해 실린더 자전(Y축 회전) 자동 추적
     if (this.runner.isRunning && !this.isDraggingToRotate) {

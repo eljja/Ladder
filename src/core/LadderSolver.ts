@@ -25,14 +25,18 @@ export class LadderSolver {
     // 시작점
     path.push({ col: currentCol, y: 0 });
 
+    let lastBridgeId: string | null = null;
+
     while (currentY < ladder.height) {
-      const next = ladder.getNextBridge(currentCol, currentY);
+      const next = ladder.getNextBridge(currentCol, currentY, lastBridgeId);
       if (!next) {
         // 더 이상 만나는 다리가 없으면 끝까지 하강
         currentY = ladder.height;
         path.push({ col: currentCol, y: currentY });
         break;
       }
+
+      lastBridgeId = next.bridge.id;
 
       // 다리 입구까지 이동
       currentY = next.enterY;

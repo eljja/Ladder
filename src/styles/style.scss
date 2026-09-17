@@ -16,10 +16,15 @@ body, html {
 }
 
 #app {
+  --sidebar-w: 320px;
   width: 100vw;
   height: 100vh;
   position: relative;
   overflow: hidden;
+
+  &.sidebar-collapsed {
+    --sidebar-w: 0px;
+  }
 }
 
 /* 3D Canvas */
@@ -86,7 +91,7 @@ body, html {
 .bottom-controls {
   position: absolute;
   bottom: 1.5rem;
-  left: 50%;
+  left: calc((100vw - var(--sidebar-w, 320px)) / 2);
   transform: translateX(-50%);
   z-index: 20;
   display: flex;
@@ -97,6 +102,7 @@ body, html {
   border-radius: 30px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  transition: left 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
 
   button {
     height: 42px;
@@ -156,7 +162,7 @@ body, html {
 .interactive-hint {
   position: absolute;
   top: 1rem;
-  left: 50%;
+  left: calc((100vw - var(--sidebar-w, 320px)) / 2);
   transform: translateX(-50%);
   z-index: 15;
   background: rgba(22, 27, 34, 0.85);
@@ -169,6 +175,7 @@ body, html {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   pointer-events: none;
   animation: fadeIn 0.4s ease;
+  transition: left 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
 
   span.highlight {
     color: #00e5ff;
@@ -210,6 +217,27 @@ body, html {
       display: flex;
       align-items: center;
       gap: 6px;
+    }
+
+    .btn-sidebar-close {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #8b949e;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: rgba(0, 229, 255, 0.2);
+        color: #00e5ff;
+        border-color: #00e5ff;
+      }
     }
   }
 
@@ -337,7 +365,7 @@ body, html {
   }
 }
 
-/* Floating Mobile Sidebar Toggle Button */
+/* Floating Mobile/Collapsed Sidebar Toggle Button */
 .btn-toggle-sidebar {
   display: none;
   position: absolute;
@@ -356,7 +384,17 @@ body, html {
   box-shadow: 0 4px 14px rgba(0, 229, 255, 0.4);
 }
 
+#app.sidebar-collapsed .btn-toggle-sidebar {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
 @media (max-width: 768px) {
+  #app {
+    --sidebar-w: 0px;
+  }
+
   .btn-toggle-sidebar {
     display: flex;
     align-items: center;

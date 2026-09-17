@@ -104,40 +104,35 @@ export class CylinderLadder {
 
   /**
    * 특정 기둥 col에서 currentY 아래로 내려갈 때 가장 먼저 만나는 다리 진입점 탐색
+   * (지나가는 연결 다리는 100% 무조건 진입하도록 보장)
    */
-  public getNextBridge(col: number, currentY: number): BridgeEndpoint | null {
+  public getNextBridge(col: number, currentY: number, excludeBridgeId?: string | null): BridgeEndpoint | null {
     const candidates: BridgeEndpoint[] = [];
 
     for (const b of this.bridges) {
+      if (excludeBridgeId && b.id === excludeBridgeId) continue;
+
       // 1. col이 b.fromCol인 경우
-      if (b.fromCol === col && b.fromY > currentY + 0.01) {
-        // 대각선일 때: fromY <= toY 이면 내려가는 방향이므로 유효
-        // 또는 수평선(isDiagonal === false)인 경우 양방향 유효
-        if (!b.isDiagonal || b.fromY <= b.toY) {
-          candidates.push({
-            bridge: b,
-            atCol: col,
-            targetCol: b.toCol,
-            enterY: b.fromY,
-            exitY: b.toY,
-            isDownward: true,
-          });
-        }
+      if (b.fromCol === col && b.fromY >= currentY - 0.0001) {
+        candidates.push({
+          bridge: b,
+          atCol: col,
+          targetCol: b.toCol,
+          enterY: b.fromY,
+          exitY: b.toY,
+          isDownward: b.toY >= b.fromY,
+        });
       }
       // 2. col이 b.toCol인 경우
-      if (b.toCol === col && b.toY > currentY + 0.01) {
-        // 대각선일 때: toY <= fromY 이면 toCol에서 fromCol로 내려가는 방향이므로 유효
-        // 또는 수평선(isDiagonal === false)인 경우 양방향 유효
-        if (!b.isDiagonal || b.toY <= b.fromY) {
-          candidates.push({
-            bridge: b,
-            atCol: col,
-            targetCol: b.fromCol,
-            enterY: b.toY,
-            exitY: b.fromY,
-            isDownward: true,
-          });
-        }
+      if (b.toCol === col && b.toY >= currentY - 0.0001) {
+        candidates.push({
+          bridge: b,
+          atCol: col,
+          targetCol: b.fromCol,
+          enterY: b.toY,
+          exitY: b.fromY,
+          isDownward: b.fromY >= b.toY,
+        });
       }
     }
 

@@ -70,7 +70,8 @@ export class MarbleMesh {
     texture.minFilter = THREE.LinearFilter;
     const spriteMat = new THREE.SpriteMaterial({
       map: texture,
-      depthTest: false,
+      depthTest: true,
+      transparent: true,
     });
     const sprite = new THREE.Sprite(spriteMat);
     sprite.scale.set(1.4, 0.44, 1);
@@ -87,6 +88,14 @@ export class MarbleMesh {
     const z = r * Math.cos(angle);
 
     this.group.position.set(x, y, z);
+
+    // Z축 앞/뒤 깊이에 따른 명암 및 투명도 조절 (앞쪽은 선명하고 밝게, 뒤쪽은 은은하게)
+    const t = Math.max(0, Math.min(1, (z / r + 1) / 2)); // 0 (뒤) ~ 1 (앞)
+    this.nameSprite.material.opacity = 0.3 + 0.7 * t;
+    const mat = this.sphereMesh.material as THREE.MeshStandardMaterial;
+    if (mat) {
+      mat.emissiveIntensity = 0.15 + 0.35 * t;
+    }
 
     // 완료 상태일 때 살짝 펄스 스케일 효과
     if (state.isFinished) {

@@ -275,15 +275,30 @@ export class LadderUI {
       this.showToast(`🏁 ${m.name} ➔ [${goalText}] 도착!`);
     });
 
-    // 13. 모든 마블 완료 이벤트 리스너 -> 결과 창 표시
+    // 13. 개별 마블 완료 이벤트 (개별 모드에서는 결과를 바로 띄우지 않고 토스트 및 폭죽만)
+    this.runner.addEventListener('singleFinish', (e: any) => {
+      const m = e.detail?.marble;
+      const finishedCount = this.runner.marbles.filter((mb) => mb.isFinished).length;
+      const totalCount = this.runner.marbles.length;
+      const remaining = totalCount - finishedCount;
+      const goalText = this.getGoalName(m?.finalCol);
+      ConfettiManager.shoot();
+      if (remaining > 0) {
+        this.showToast(
+          `🏁 [${m?.name || '마블'}] ➔ [${goalText}] 도착! (남은 구슬: ${remaining}개 - 다음 구슬을 터치하세요)`
+        );
+      }
+    });
+
+    // 14. 모든 마블 완료 이벤트 리스너 -> 모든 마블이 끝난 후에만 최종 결과 창 표시
     this.runner.addEventListener('allFinish', () => {
       ConfettiManager.grandFinale();
       setTimeout(() => {
         this.showResultModal();
-      }, 1200);
+      }, 1000);
     });
 
-    // 14. 결과 모달 복사 버튼
+    // 15. 결과 모달 복사 버튼
     this.btnCopyResult.addEventListener('click', () => {
       if (this.activeResults.length === 0) return;
       const lines = ['[원통형 3D 사다리 게임 추첨 결과]'];
@@ -296,7 +311,7 @@ export class LadderUI {
       });
     });
 
-    // 15. 당첨자 제외하고 다음 판 (서바이벌 모드)
+    // 16. 당첨자 제외하고 다음 판 (서바이벌 모드)
     this.btnNextRoundExclude.addEventListener('click', () => {
       // 1등 또는 당첨자 항목을 받은 참가자 제외
       if (this.activeResults.length <= 1) {
@@ -320,23 +335,39 @@ export class LadderUI {
       this.showToast(`⏭️ [${winner.name}]님을 제외하고 다음 판을 준비했습니다!`);
     });
 
-    // 16. 같은 명단으로 다시하기
+    // 17. 같은 명단으로 다시하기
     this.btnRestartSame.addEventListener('click', () => {
       this.closeResultModal();
       this.runner.reset();
       this.showToast('🔄 같은 명단으로 다시 시작합니다.');
     });
 
-    // 17. 결과 모달 닫기
+    // 18. 결과 모달 닫기
     this.btnCloseModal.addEventListener('click', () => {
       this.closeResultModal();
     });
 
-    // 18. 모바일 사이드바 토글 버튼
+    // 19. 사이드바 접기/열기 버튼 (데스크톱 및 모바일 반응형 + 3D 중심축 재정렬)
     const btnToggleSidebar = document.querySelector('#btnToggleSidebar');
+    const btnCollapseSidebar = document.querySelector('#btnCollapseSidebar');
     const sidebar = document.querySelector('#sidebar');
-    btnToggleSidebar?.addEventListener('click', () => {
-      sidebar?.classList.toggle('open');
+    const app = document.querySelector('#app');
+
+    const toggleSidebar = () => {
+      if (window.innerWidth <= 768) {
+        sidebar?.classList.toggle('open');
+      } else {
+        sidebar?.classList.toggle('collapsed');
+        app?.classList.toggle('sidebar-collapsed');
+        this.scene.updateWorkspaceOffset();
+      }
+    };
+
+    btnToggleSidebar?.addEventListener('click', toggleSidebar);
+    btnCollapseSidebar?.addEventListener('click', toggleSidebar);
+
+    window.addEventListener('resize', () => {
+      this.scene.updateWorkspaceOffset();
     });
   }
 
@@ -393,7 +424,8 @@ export class LadderUI {
     solutions.forEach((sol) => {
       const marble = this.runner.marbles.find((m) => m.startCol === sol.startCol);
       const name = marble ? marble.name : `참가자 ${sol.startCol + 1}`;
-      const goal = this.getGoalName(sol.finalCol);
+      const finalCol = marble?.finalCol !== undefined ? marble.finalCol : sol.finalCol;
+      const goal = this.getGoalName(finalCol);
 
       this.activeResults.push({ name, goal });
 
