@@ -52,6 +52,9 @@ export class LadderUI {
   private btnToggleView!: HTMLButtonElement;
   private btnQuickTopView!: HTMLButtonElement;
   private sliderDensity!: HTMLInputElement;
+  private sliderTaper!: HTMLInputElement;
+  private valTaper!: HTMLElement;
+  private btnResetTaper!: HTMLButtonElement;
 
   private resultModal!: HTMLElement;
   private resultList!: HTMLElement;
@@ -92,6 +95,9 @@ export class LadderUI {
     this.btnBgm = document.querySelector('#btnBgm')!;
     this.btnToggleView = document.querySelector('#btnToggleView')!;
     this.sliderDensity = document.querySelector('#sliderDensity')!;
+    this.sliderTaper = document.querySelector('#sliderTaper')!;
+    this.valTaper = document.querySelector('#valTaper')!;
+    this.btnResetTaper = document.querySelector('#btnResetTaper')!;
 
     this.resultModal = document.querySelector('#resultModal')!;
     this.resultList = document.querySelector('#resultList')!;
@@ -246,6 +252,35 @@ export class LadderUI {
       this.scene.rebuildBridges();
       soundManager.playBridgeAdd();
       this.showToast('🎲 새로운 랜덤 사다리가 생성되었습니다!');
+    });
+
+    // 8-1. 원근 / 하단 크기 조절 슬라이더
+    this.sliderTaper?.addEventListener('input', () => {
+      const val = parseFloat(this.sliderTaper.value);
+      this.ladder.setTaperRatio(val);
+      this.scene.buildCylinderStructure();
+
+      let desc = '';
+      if (Math.abs(val - 1.0) < 0.02) {
+        desc = '1.00x (기본 원통형)';
+      } else if (val < 0.98) {
+        desc = `${val.toFixed(2)}x (원뿔형: 아래 좁아짐)`;
+      } else {
+        desc = `${val.toFixed(2)}x (역원뿔형: 아래 넓어짐)`;
+      }
+      if (this.valTaper) {
+        this.valTaper.textContent = desc;
+      }
+    });
+
+    this.btnResetTaper?.addEventListener('click', () => {
+      this.sliderTaper.value = '1.0';
+      this.ladder.setTaperRatio(1.0);
+      this.scene.buildCylinderStructure();
+      if (this.valTaper) {
+        this.valTaper.textContent = '1.00x (기본 원통형)';
+      }
+      this.showToast('📐 원근 비율이 기본(1.0x 원통형)으로 초기화되었습니다.');
     });
 
     // 9. 다리 모두 지우기

@@ -22,12 +22,34 @@ export class CylinderLadder {
   public colCount: number;
   public height: number;
   public radius: number;
+  public taperRatio: number = 1.0; // 하단/상단 반경 비율 (기본값 1.0 = 균일 원통, <1.0 = 원뿔형, >1.0 = 나팔형)
   public bridges: LadderBridge[] = [];
 
-  constructor(colCount: number = 6, height: number = 12, radius: number = 3.5) {
+  constructor(colCount: number = 6, height: number = 12, radius: number = 3.5, taperRatio: number = 1.0) {
     this.colCount = Math.max(2, colCount);
     this.height = height;
     this.radius = radius;
+    this.taperRatio = taperRatio;
+  }
+
+  public get radiusTop(): number {
+    return this.radius;
+  }
+
+  public get radiusBottom(): number {
+    return this.radius * this.taperRatio;
+  }
+
+  /**
+   * 사다리 높이 yNorm (0 = 상단 출발선, height = 하단 골선)에서의 반경 계산
+   */
+  public getRadiusAt(yNorm: number): number {
+    const t = Math.max(0, Math.min(1, yNorm / this.height));
+    return this.radiusTop + (this.radiusBottom - this.radiusTop) * t;
+  }
+
+  public setTaperRatio(ratio: number) {
+    this.taperRatio = Math.max(0.3, Math.min(2.5, ratio));
   }
 
   public setColCount(count: number) {

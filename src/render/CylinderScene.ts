@@ -18,6 +18,8 @@ export class CylinderScene {
   private bridgeMeshes: Map<string, THREE.Mesh> = new Map();
   private railMeshes: THREE.Mesh[] = [];
   private railHitMeshes: THREE.Mesh[] = [];
+  private topRingMesh: THREE.Mesh | null = null;
+  private botRingMesh: THREE.Mesh | null = null;
   private goalSprites: THREE.Sprite[] = [];
   private coreMesh: THREE.Mesh | null = null;
   public onToast?: (msg: string) => void;
@@ -154,13 +156,27 @@ export class CylinderScene {
       this.coreMesh = null;
     }
 
+    // 기존 링 정리
+    if (this.topRingMesh) {
+      this.cylinderGroup.remove(this.topRingMesh);
+      this.topRingMesh.geometry.dispose();
+      (this.topRingMesh.material as THREE.Material).dispose();
+      this.topRingMesh = null;
+    }
+    if (this.botRingMesh) {
+      this.cylinderGroup.remove(this.botRingMesh);
+      this.botRingMesh.geometry.dispose();
+      (this.botRingMesh.material as THREE.Material).dispose();
+      this.botRingMesh = null;
+    }
+
     const N = this.ladder.colCount;
-    const R = this.ladder.radius;
+    const Rtop = this.ladder.radiusTop;
+    const Rbot = this.ladder.radiusBottom;
     const H = this.ladder.height;
 
-    // 1. 중심 반투명 다크 글래스 코어 (앞/뒤 시각적 깊이감 및 원통 차폐 효과)
-    // 앞쪽 레일/다리는 또렷하게, 뒤쪽 레일/다리는 코어를 통과해 자연스럽게 어두워짐
-    const coreGeom = new THREE.CylinderGeometry(R - 0.12, R - 0.12, H + 0.1, 48, 1, true);
+    // 1. 중심 반투명 다크 글래스 코어 (상/하단 테이퍼 반영)
+    const coreGeom = new THREE.CylinderGeometry(Rtop - 0.12, Rbot - 0.12, H + 0.1, 48, 1, true);
     const coreMat = new THREE.MeshStandardMaterial({
       color: 0x080d16,
       roughness: 0.35,
@@ -173,14 +189,20 @@ export class CylinderScene {
     this.coreMesh.position.set(0, 0, 0);
     this.cylinderGroup.add(this.coreMesh);
 
-    // 2. 수직 기둥 (Rails) 생성
+    // 2. 수직 기둥 (Rails) 생성 (상단 pTop에서 하단 pBot을 잇는 3D Tube)
     for (let i = 0; i < N; i++) {
       const angle = (i / N) * Math.PI * 2;
-      const x = R * Math.sin(angle);
-      const z = R * Math.cos(angle);
+      const xTop = Rtop * Math.sin(angle);
+      const zTop = Rtop * Math.cos(angle);
+      const xBot = Rbot * Math.sin(angle);
+      const zBot = Rbot * Math.cos(angle);
+
+      const pTop = new THREE.Vector3(xTop, H / 2, zTop);
+      const pBot = new THREE.Vector3(xBot, -H / 2, zBot);
+      const curve = new THREE.LineCurve3(pTop, pBot);
 
       // (1) 시각적 얇은 네온 레일 (반지름 0.065)
-      const railGeom = new THREE.CylinderGeometry(0.065, 0.065, H, 16);
+      const railGeom = new THREE.TubeGeometry(curve, 2, 0.065, 8, false);
       const railMat = new THREE.MeshStandardMaterial({
         color: 0x38bdf8,
         emissive: 0x0284c7,
@@ -190,44 +212,44 @@ export class CylinderScene {
       });
 
       const rail = new THREE.Mesh(railGeom, railMat);
-      rail.position.set(x, 0, z);
       rail.userData = { isRail: true, colIndex: i };
       this.cylinderGroup.add(rail);
       this.railMeshes.push(rail);
 
       // (2) 마우스/터치 판정용 와이드 투명 히트 실린더 (반지름 0.32: 화면상 20~25px의 넉넉한 터치 영역)
-      const hitGeom = new THREE.CylinderGeometry(0.32, 0.32, H, 12);
+      const hitGeom = new THREE.TubeGeometry(curve, 2, 0.32, 8, false);
       const hitMat = new THREE.MeshBasicMaterial({
         transparent: true,
         opacity: 0,
         depthWrite: false,
       });
       const hitProxy = new THREE.Mesh(hitGeom, hitMat);
-      hitProxy.position.set(x, 0, z);
       hitProxy.userData = { isRail: true, colIndex: i };
       this.cylinderGroup.add(hitProxy);
       this.railHitMeshes.push(hitProxy);
     }
 
     // 3. 상단 및 하단 네온 링 장식
-    const ringGeom = new THREE.TorusGeometry(R, 0.08, 16, 64);
+    const topRingGeom = new THREE.TorusGeometry(Rtop, 0.08, 16, 64);
     const ringMat = new THREE.MeshStandardMaterial({
       color: 0x00e5ff,
       emissive: 0x00e5ff,
       emissiveIntensity: 0.5,
     });
-    const topRing = new THREE.Mesh(ringGeom, ringMat);
-    topRing.rotation.x = Math.PI / 2;
-    topRing.position.y = H / 2;
-    this.cylinderGroup.add(topRing);
+    this.topRingMesh = new THREE.Mesh(topRingGeom, ringMat);
+    this.topRingMesh.rotation.x = Math.PI / 2;
+    this.topRingMesh.position.y = H / 2;
+    this.cylinderGroup.add(this.topRingMesh);
 
-    const botRing = new THREE.Mesh(ringGeom.clone(), ringMat.clone());
-    botRing.rotation.x = Math.PI / 2;
-    botRing.position.y = -H / 2;
-    this.cylinderGroup.add(botRing);
+    const botRingGeom = new THREE.TorusGeometry(Rbot, 0.08, 16, 64);
+    this.botRingMesh = new THREE.Mesh(botRingGeom, ringMat.clone());
+    this.botRingMesh.rotation.x = Math.PI / 2;
+    this.botRingMesh.position.y = -H / 2;
+    this.cylinderGroup.add(this.botRingMesh);
 
     this.rebuildBridges();
     this.updateGoalLabels();
+    this.syncMarbleMeshes();
   }
 
   /**
@@ -258,7 +280,6 @@ export class CylinderScene {
     isValid: boolean = true
   ): THREE.Mesh {
     const N = this.ladder.colCount;
-    const R = this.ladder.radius;
     const H = this.ladder.height;
 
     const angleA = (bridge.fromCol / N) * Math.PI * 2;
@@ -277,9 +298,10 @@ export class CylinderScene {
       const angle = angleA + diff * t;
       const yNorm = bridge.fromY + (bridge.toY - bridge.fromY) * t;
       const y3D = H / 2 - yNorm;
+      const r = this.ladder.getRadiusAt(yNorm);
 
-      const x = R * Math.sin(angle);
-      const z = R * Math.cos(angle);
+      const x = r * Math.sin(angle);
+      const z = r * Math.cos(angle);
       points.push(new THREE.Vector3(x, y3D, z));
     }
 
@@ -319,13 +341,13 @@ export class CylinderScene {
     this.goalSprites = [];
 
     const N = this.ladder.colCount;
-    const R = this.ladder.radius;
+    const Rbot = this.ladder.radiusBottom;
     const H = this.ladder.height;
 
     for (let i = 0; i < N; i++) {
       const angle = (i / N) * Math.PI * 2;
-      const x = (R + 0.35) * Math.sin(angle);
-      const z = (R + 0.35) * Math.cos(angle);
+      const x = (Rbot + 0.35) * Math.sin(angle);
+      const z = (Rbot + 0.35) * Math.cos(angle);
       const y = -H / 2 - 0.5;
 
       const label = this.goalNames[i] || `골 #${i + 1}`;
@@ -701,7 +723,7 @@ export class CylinderScene {
    */
   public update(dtSeconds: number) {
     const H = this.ladder.height;
-    const R = this.ladder.radius;
+    const Rbot = this.ladder.radiusBottom;
 
     // 마블 메시 동기화
     this.syncMarbleMeshes();
@@ -710,7 +732,7 @@ export class CylinderScene {
     this.goalSprites.forEach((sprite) => {
       const wp = new THREE.Vector3();
       sprite.getWorldPosition(wp);
-      const t = Math.max(0, Math.min(1, (wp.z / (R + 0.35) + 1) / 2));
+      const t = Math.max(0, Math.min(1, (wp.z / (Rbot + 0.35) + 1) / 2));
       sprite.material.opacity = 0.45 + 0.55 * t;
     });
 
@@ -762,7 +784,6 @@ export class CylinderScene {
 
   private syncMarbleMeshes() {
     const H = this.ladder.height;
-    const R = this.ladder.radius;
     const currentIds = new Set(this.runner.marbles.map((m) => m.id));
 
     // 없어진 마블 메시 제거
@@ -774,7 +795,7 @@ export class CylinderScene {
       }
     }
 
-    // 마블 메시 생성 및 위치 갱신
+    // 마블 메시 생성 및 위치 갱신 (높이별 테이퍼 반경 적용)
     for (const state of this.runner.marbles) {
       let mm = this.marbleMeshes.get(state.id);
       if (!mm) {
@@ -782,7 +803,7 @@ export class CylinderScene {
         this.cylinderGroup.add(mm.group);
         this.marbleMeshes.set(state.id, mm);
       }
-      mm.updateTransform(state, R, H);
+      mm.updateTransform(state, this.ladder.getRadiusAt(state.currentY), H);
     }
   }
 }
