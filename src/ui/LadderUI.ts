@@ -51,6 +51,8 @@ export class LadderUI {
   private btnBgm!: HTMLButtonElement;
   private btnToggleView!: HTMLButtonElement;
   private btnQuickTopView!: HTMLButtonElement;
+  private btnToggleCamLock!: HTMLButtonElement;
+  private btnToggleCamLockSidebar!: HTMLButtonElement;
   private sliderDensity!: HTMLInputElement;
   private sliderTaper!: HTMLInputElement;
   private valTaper!: HTMLElement;
@@ -87,6 +89,7 @@ export class LadderUI {
     this.btnStartSimul = document.querySelector('#btnStartSimul')!;
     this.btnModeToggle = document.querySelector('#btnModeToggle')!;
     this.btnQuickTopView = document.querySelector('#btnQuickTopView')!;
+    this.btnToggleCamLock = document.querySelector('#btnToggleCamLock')!;
     this.btnReset = document.querySelector('#btnReset')!;
     this.btnRandomize = document.querySelector('#btnRandomize')!;
     this.btnClearBridges = document.querySelector('#btnClearBridges')!;
@@ -94,6 +97,7 @@ export class LadderUI {
     this.btnSound = document.querySelector('#btnSound')!;
     this.btnBgm = document.querySelector('#btnBgm')!;
     this.btnToggleView = document.querySelector('#btnToggleView')!;
+    this.btnToggleCamLockSidebar = document.querySelector('#btnToggleCamLockSidebar')!;
     this.sliderDensity = document.querySelector('#sliderDensity')!;
     this.sliderTaper = document.querySelector('#sliderTaper')!;
     this.valTaper = document.querySelector('#valTaper')!;
@@ -336,6 +340,27 @@ export class LadderUI {
 
     this.btnToggleView?.addEventListener('click', handleViewToggle);
     this.btnQuickTopView?.addEventListener('click', handleViewToggle);
+
+    // 11-3. 카메라 자동 회전/추적 고정 토글
+    const handleCamLockToggle = () => {
+      const isLocked = this.scene.toggleCameraLock();
+      if (this.btnToggleCamLock) {
+        this.btnToggleCamLock.textContent = isLocked ? '🔒 카메라 고정됨' : '🔒 카메라 고정';
+        this.btnToggleCamLock.classList.toggle('active', isLocked);
+      }
+      if (this.btnToggleCamLockSidebar) {
+        this.btnToggleCamLockSidebar.textContent = isLocked ? '🔒 카메라 고정: ON' : '🔒 카메라 고정: OFF (추적 중)';
+        this.btnToggleCamLockSidebar.classList.toggle('active', isLocked);
+      }
+      this.showToast(
+        isLocked
+          ? '🔒 카메라 고정: 경기 진행 중 화면이 자동으로 회전하지 않습니다.'
+          : '🎥 카메라 추적: 경기 진행 중 1등 마블을 따라 자동 회전합니다.'
+      );
+    };
+
+    this.btnToggleCamLock?.addEventListener('click', handleCamLockToggle);
+    this.btnToggleCamLockSidebar?.addEventListener('click', handleCamLockToggle);
 
     // 12. 골인 이벤트 리스너
     this.runner.addEventListener('marbleGoal', (e: any) => {

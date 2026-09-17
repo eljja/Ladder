@@ -80,6 +80,13 @@ export class CylinderScene {
     return this.isTopView;
   }
 
+  public isCameraLocked: boolean = false;
+
+  public toggleCameraLock(): boolean {
+    this.isCameraLocked = !this.isCameraLocked;
+    return this.isCameraLocked;
+  }
+
   constructor(canvas: HTMLCanvasElement, ladder: CylinderLadder, runner: MarbleRunner) {
     this.canvas = canvas;
     this.ladder = ladder;
@@ -741,8 +748,8 @@ export class CylinderScene {
       this.cylinderGroup.rotation.x += (this.targetPitch - this.cylinderGroup.rotation.x) * 4.0 * dtSeconds;
     }
 
-    // 경기 진행 중: 1등/활성 마블을 향해 실린더 자전(Y축 회전) 자동 추적
-    if (this.runner.isRunning && !this.isDraggingToRotate) {
+    // 경기 진행 중: 1등/활성 마블을 향해 실린더 자전(Y축 회전) 자동 추적 (카메라 고정 모드가 아닐 때만)
+    if (this.runner.isRunning && !this.isDraggingToRotate && !this.isCameraLocked) {
       const focused = this.runner.getFocusedMarble();
       if (focused) {
         // 마블의 3D 월드 각도를 카메라 정면(0도)으로 맞추기 위한 목표 실린더 회전각
@@ -773,7 +780,7 @@ export class CylinderScene {
     } else {
       this.runner.trackingCatchupFactor = 1.0;
       if (!this.isDraggingToRotate) {
-        // 대기 중일 때 카메라 천천히 원래 높이와 줌으로 복귀
+        // 대기 중이거나 카메라 고정 모드일 때 카메라 높이를 기본(0)으로 부드럽게 유지
         this.camera.position.y += (0 - this.camera.position.y) * 2.0 * dtSeconds;
         this.camera.position.z += (this.cameraDistance - this.camera.position.z) * 3.0 * dtSeconds;
       }

@@ -96,6 +96,9 @@ body, html {
   z-index: 20;
   display: flex;
   gap: 12px;
+  max-width: 95vw;
+  flex-wrap: wrap;
+  justify-content: center;
   background: rgba(18, 22, 28, 0.85);
   backdrop-filter: blur(12px);
   padding: 8px 16px;
@@ -142,6 +145,13 @@ body, html {
         color: #ff007f;
         border-color: #ff007f;
         box-shadow: 0 0 16px rgba(255, 0, 127, 0.4);
+      }
+
+      &.btn-cam-lock.active {
+        background: rgba(0, 229, 255, 0.2);
+        color: #00e5ff;
+        border-color: #00e5ff;
+        box-shadow: 0 0 16px rgba(0, 229, 255, 0.4);
       }
     }
 
@@ -385,6 +395,10 @@ body, html {
           background: rgba(0, 229, 255, 0.2);
           color: #00e5ff;
           border-color: #00e5ff;
+        }
+
+        &.btn-span-2 {
+          grid-column: span 2;
         }
       }
     }
