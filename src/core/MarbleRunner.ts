@@ -32,6 +32,7 @@ export class MarbleRunner extends EventTarget {
   public marbles: MarbleState[] = [];
   public mode: RunnerMode = 'simultaneous';
   public speedMultiplier: number = 1.0;
+  public trackingCatchupFactor: number = 1.0; // 카메라/시점 이동 중 0.5배속 감속용
   public isRunning: boolean = false;
   public singleActiveId: number | null = null;
 
@@ -165,7 +166,9 @@ export class MarbleRunner extends EventTarget {
     if (!this.isRunning) return;
 
     const N = this.ladder.colCount;
-    const baseSpeed = 2.8 * this.speedMultiplier; // 기본 하강 속도
+    // 카메라/시점 이동 중에는 0.5배속 적용
+    const effectiveDt = dtSeconds * this.trackingCatchupFactor;
+    const baseSpeed = 2.4 * this.speedMultiplier; // 기본 하강 속도
     let anyRunning = false;
 
     for (const m of this.marbles) {
@@ -174,8 +177,8 @@ export class MarbleRunner extends EventTarget {
 
       if (m.isTraversingBridge) {
         // 다리를 건너는 중
-        const bridgeSpeed = 2.4 * this.speedMultiplier;
-        m.bridgeProgress += bridgeSpeed * dtSeconds;
+        const bridgeSpeed = 2.1 * this.speedMultiplier;
+        m.bridgeProgress += bridgeSpeed * effectiveDt;
 
         if (m.bridgeProgress >= 1.0) {
           // 다리 건너기 완료 -> 대상 기둥 도착
@@ -202,7 +205,7 @@ export class MarbleRunner extends EventTarget {
         m.currentAngle = (m.currentCol / N) * Math.PI * 2;
         const nextBridge = this.ladder.getNextBridge(m.currentCol, m.currentY, m.lastBridgeId);
 
-        if (nextBridge && m.currentY + baseSpeed * dtSeconds >= nextBridge.enterY) {
+        if (nextBridge && m.currentY + baseSpeed * effectiveDt >= nextBridge.enterY) {
           // 다리 입구 도달!
           m.currentY = nextBridge.enterY;
           m.isTraversingBridge = true;
@@ -216,7 +219,7 @@ export class MarbleRunner extends EventTarget {
 
           soundManager.playSlide(1.0 + (m.id % 5) * 0.1);
         } else {
-          m.currentY += baseSpeed * dtSeconds;
+          m.currentY += baseSpeed * effectiveDt;
           if (m.currentY >= this.ladder.height) {
             // 골인 도달!
             m.currentY = this.ladder.height;

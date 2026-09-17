@@ -1,3 +1,5 @@
+import { LadderSolver } from './LadderSolver';
+
 export interface LadderBridge {
   id: string;
   fromCol: number;
@@ -144,34 +146,63 @@ export class CylinderLadder {
   }
 
   /**
-   * 랜덤 사다리 가로선/대각선 자동 생성
+   * 랜덤 사다리 가로선 및 대각선 다리 자동 생성
+   * (대각선 다리를 포함하며, 모든 참가자가 완주하고 1:1 매칭되는 유효 배치를 검증하여 생성)
    * @param density 기둥당 평균 다리 수 (기본 3.5개)
    */
   public generateRandomBridges(density: number = 3.5) {
-    this.clearBridges();
     const N = this.colCount;
     const minY = 1.0;
     const maxY = this.height - 1.2;
     const availableHeight = maxY - minY;
-
-    // 각 인접 쌍 (0,1), (1,2), ..., (N-1, 0)
     const targetBridgesPerPair = Math.max(2, Math.round(density));
 
+    for (let globalAttempt = 0; globalAttempt < 30; globalAttempt++) {
+      this.clearBridges();
+
+      for (let c = 0; c < N; c++) {
+        const nextCol = (c + 1) % N;
+        const count = targetBridgesPerPair + (Math.random() > 0.6 ? 1 : 0);
+
+        for (let i = 0; i < count; i++) {
+          for (let attempt = 0; attempt < 15; attempt++) {
+            const segH = availableHeight / count;
+            const baseY = minY + i * segH + (Math.random() * 0.6 + 0.2) * segH;
+
+            // 약 35% 확률로 대각선 다리 생성 (경사각 0.4 ~ 0.5)
+            const isDiagonal = Math.random() < 0.35;
+            const slope = isDiagonal ? (Math.random() > 0.5 ? 0.45 : -0.45) : 0;
+            const fromY = baseY;
+            const toY = Math.max(minY, Math.min(maxY, baseY + slope));
+
+            const added = this.addBridge(c, nextCol, fromY, toY);
+            if (added) break;
+          }
+        }
+      }
+
+      // LadderSolver를 통해 모든 참가자가 루프 없이 바닥에 닿고 1:1 매칭되는지 검증
+      const solutions = LadderSolver.solveAll(this);
+      const allFinished = solutions.every(
+        (s) => s.path.length < 200 && s.path[s.path.length - 1].y >= this.height - 0.01
+      );
+      const uniqueGoals = new Set(solutions.map((s) => s.finalCol));
+
+      if (allFinished && uniqueGoals.size === N) {
+        return;
+      }
+    }
+
+    // fallback: 수평선 생성 (수학적 100% 보장)
+    this.clearBridges();
     for (let c = 0; c < N; c++) {
       const nextCol = (c + 1) % N;
-      const count = targetBridgesPerPair + (Math.random() > 0.5 ? 1 : 0);
-
+      const count = targetBridgesPerPair;
       for (let i = 0; i < count; i++) {
-        // 시도 횟수 제한
         for (let attempt = 0; attempt < 15; attempt++) {
           const segH = availableHeight / count;
           const baseY = minY + i * segH + (Math.random() * 0.6 + 0.2) * segH;
-
-          // 랜덤 생성은 100% 공평한 전단사(1:1 매핑)를 보장하기 위해 수평선으로 생성
-          const fromY = baseY;
-          const toY = baseY;
-
-          const added = this.addBridge(c, nextCol, fromY, toY);
+          const added = this.addBridge(c, nextCol, baseY, baseY);
           if (added) break;
         }
       }

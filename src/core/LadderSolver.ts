@@ -26,8 +26,10 @@ export class LadderSolver {
     path.push({ col: currentCol, y: 0 });
 
     let lastBridgeId: string | null = null;
+    let stepCount = 0;
 
-    while (currentY < ladder.height) {
+    while (currentY < ladder.height && stepCount < 250) {
+      stepCount++;
       const next = ladder.getNextBridge(currentCol, currentY, lastBridgeId);
       if (!next) {
         // 더 이상 만나는 다리가 없으면 끝까지 하강

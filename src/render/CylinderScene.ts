@@ -25,6 +25,8 @@ export class CylinderScene {
   private isDrawingBridge: boolean = false;
   private drawStartCol: number | null = null;
   private drawStartY: number = 0;
+  private drawPointerStartX: number = 0;
+  private drawPointerStartY: number = 0;
   private previewBridgeMesh: THREE.Mesh | null = null;
 
   // 수동 실린더 회전 상태
@@ -32,8 +34,8 @@ export class CylinderScene {
   private prevPointerX: number = 0;
   private prevPointerY: number = 0;
 
-  // 카메라 줌
-  private cameraDistance: number = 11.5;
+  // 카메라 줌 (처음 시작 시 사다리 전체 높이가 한눈에 보이도록 18.5로 설정)
+  private cameraDistance: number = window.innerWidth <= 768 ? 22.0 : 18.5;
 
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private pointer: THREE.Vector2 = new THREE.Vector2();
@@ -120,7 +122,7 @@ export class CylinderScene {
       roughness: 0.35,
       metalness: 0.15,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.4,
       side: THREE.DoubleSide,
     });
     this.coreMesh = new THREE.Mesh(coreGeom, coreMat);
@@ -340,6 +342,8 @@ export class CylinderScene {
         this.isDrawingBridge = true;
         this.drawStartCol = railHit.colIndex;
         this.drawStartY = railHit.ladderY;
+        this.drawPointerStartX = e.clientX;
+        this.drawPointerStartY = e.clientY;
       } else {
         // 빈 공간 클릭 -> 실린더 수동 회전
         this.isDraggingToRotate = true;
@@ -350,11 +354,29 @@ export class CylinderScene {
       this.updatePointer(e);
 
       if (this.isDrawingBridge && this.drawStartCol !== null) {
-        // 인접 기둥과의 드래그 선 실시간 프리뷰
+        // 인접 기둥과의 드래그 선 실시간 프리뷰 (마우스 좌우 이동 방향 반영)
         const railHit = this.raycastRail();
         const N = this.ladder.colCount;
-        const targetCol = (this.drawStartCol + 1) % N; // 기본 다음 기둥
-        const targetY = railHit ? railHit.ladderY : this.drawStartY;
+
+        const dx = e.clientX - this.drawPointerStartX;
+        const leftCol = (this.drawStartCol - 1 + N) % N;
+        const rightCol = (this.drawStartCol + 1) % N;
+
+        // 드래그 방향에 따라 좌측 또는 우측 인접 기둥 선택
+        let targetCol = dx < 0 ? leftCol : rightCol;
+        if (railHit && this.ladder.isAdjacent(this.drawStartCol, railHit.colIndex)) {
+          targetCol = railHit.colIndex;
+        }
+
+        // Y 높이: 기둥 히트 시 해당 Y, 아니면 세로 드래그 거리에 비례하여 부드럽게 기울기 반영
+        let targetY = this.drawStartY;
+        if (railHit) {
+          targetY = railHit.ladderY;
+        } else {
+          const dy = e.clientY - this.drawPointerStartY;
+          const deltaLadderY = dy * 0.015;
+          targetY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + deltaLadderY));
+        }
 
         if (this.previewBridgeMesh) {
           this.cylinderGroup.remove(this.previewBridgeMesh);
@@ -386,18 +408,25 @@ export class CylinderScene {
       }
     });
 
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', (e: PointerEvent) => {
       if (this.isDrawingBridge && this.drawStartCol !== null) {
         const railHit = this.raycastRail();
         const N = this.ladder.colCount;
 
-        // 인접 기둥으로 드래그를 마쳤을 때 다리 생성
-        let toCol = (this.drawStartCol + 1) % N;
+        const dx = e.clientX - this.drawPointerStartX;
+        const leftCol = (this.drawStartCol - 1 + N) % N;
+        const rightCol = (this.drawStartCol + 1) % N;
+
+        let toCol = dx < 0 ? leftCol : rightCol;
         let toY = this.drawStartY;
 
         if (railHit && this.ladder.isAdjacent(this.drawStartCol, railHit.colIndex)) {
           toCol = railHit.colIndex;
           toY = railHit.ladderY;
+        } else {
+          const dy = e.clientY - this.drawPointerStartY;
+          const deltaLadderY = dy * 0.015;
+          toY = Math.max(0.8, Math.min(this.ladder.height - 0.8, this.drawStartY + deltaLadderY));
         }
 
         const added = this.ladder.addBridge(this.drawStartCol, toCol, this.drawStartY, toY);
@@ -420,10 +449,10 @@ export class CylinderScene {
       this.isDraggingToRotate = false;
     });
 
-    // 마우스 휠 줌
+    // 마우스 휠 줌 (초기 줌 18.5 기준 9 ~ 32 허용)
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.cameraDistance = Math.max(6, Math.min(22, this.cameraDistance + e.deltaY * 0.01));
+      this.cameraDistance = Math.max(9, Math.min(32, this.cameraDistance + e.deltaY * 0.015));
       this.camera.position.z = this.cameraDistance;
     });
 
@@ -536,7 +565,7 @@ export class CylinderScene {
       const wp = new THREE.Vector3();
       sprite.getWorldPosition(wp);
       const t = Math.max(0, Math.min(1, (wp.z / (R + 0.35) + 1) / 2));
-      sprite.material.opacity = 0.25 + 0.75 * t;
+      sprite.material.opacity = 0.45 + 0.55 * t;
     });
 
     // 경기 진행 중: 1등/활성 마블을 향해 실린더 자전(Y축 회전) 자동 추적
@@ -549,15 +578,32 @@ export class CylinderScene {
         // 원환 최단 각도 보간 (Wrap to [-PI, PI])
         let diff = targetRotY - this.cylinderGroup.rotation.y;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-        this.cylinderGroup.rotation.y += diff * Math.min(1.0, 7.5 * dtSeconds);
 
-        // 카메라 수직 시점도 마블의 하강을 살짝 추적 (카메라 상하 이동)
-        const targetCamY = (H / 2 - focused.currentY) * 0.45;
-        this.camera.position.y += (targetCamY - this.camera.position.y) * 4.0 * dtSeconds;
+        // 천천히 부드럽게 실린더 회전 추적 (기존 7.5 -> 2.6)
+        const rotSpeed = 2.6;
+        this.cylinderGroup.rotation.y += diff * Math.min(1.0, rotSpeed * dtSeconds);
+
+        // 카메라 수직 시점도 마블의 하강을 부드럽게 추적 (기존 4.0 -> 1.8)
+        const targetCamY = (H / 2 - focused.currentY) * 0.38;
+        this.camera.position.y += (targetCamY - this.camera.position.y) * 1.8 * dtSeconds;
+
+        // 카메라/시점 이동 중에는 마블 이동 속도를 0.5배속으로 늦춰서 안정적 관람 보장
+        const angleLag = Math.abs(diff);
+        if (angleLag > 0.06) {
+          this.runner.trackingCatchupFactor = 0.5;
+        } else if (angleLag > 0.02) {
+          this.runner.trackingCatchupFactor = 0.75;
+        } else {
+          this.runner.trackingCatchupFactor = 1.0;
+        }
       }
-    } else if (!this.runner.isRunning && !this.isDraggingToRotate) {
-      // 대기 중일 때 카메라 천천히 원래 높이(0)로 복귀
-      this.camera.position.y += (0 - this.camera.position.y) * 3.0 * dtSeconds;
+    } else {
+      this.runner.trackingCatchupFactor = 1.0;
+      if (!this.isDraggingToRotate) {
+        // 대기 중일 때 카메라 천천히 원래 높이와 줌으로 복귀
+        this.camera.position.y += (0 - this.camera.position.y) * 2.0 * dtSeconds;
+        this.camera.position.z += (this.cameraDistance - this.camera.position.z) * 3.0 * dtSeconds;
+      }
     }
 
     this.renderer.render(this.scene, this.camera);
