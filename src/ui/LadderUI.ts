@@ -234,6 +234,7 @@ export class LadderUI {
     // 7. 다시하기 (리셋)
     this.btnReset.addEventListener('click', () => {
       this.runner.reset();
+      this.scene.resetView();
       this.showToast('🔄 사다리가 리셋되었습니다.');
     });
 
@@ -365,6 +366,7 @@ export class LadderUI {
       this.inNames.value = nextList.join(', ');
       this.applyCurrentNamesAndGoals();
       this.closeResultModal();
+      this.scene.resetView();
       this.showToast(`⏭️ [${winner.name}]님을 제외하고 다음 판을 준비했습니다!`);
     });
 
@@ -372,6 +374,7 @@ export class LadderUI {
     this.btnRestartSame.addEventListener('click', () => {
       this.closeResultModal();
       this.runner.reset();
+      this.scene.resetView();
       this.showToast('🔄 같은 명단으로 다시 시작합니다.');
     });
 

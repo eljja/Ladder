@@ -38,13 +38,37 @@ export class CylinderScene {
   public isTopView: boolean = false;
   public targetPitch: number = 0; // X축 목표 회전각 (0 = 정면, Math.PI * 0.485 = 완전 탑뷰)
 
-  // 카메라 줌 (처음 시작 시 사다리 전체 높이가 한눈에 보이도록 18.5로 설정)
-  private cameraDistance: number = window.innerWidth <= 768 ? 22.0 : 18.5;
+  // 카메라 줌 및 핀치 인터랙션 상태
+  public hasUserManuallyZoomed: boolean = false;
+  private activePointers: Map<number, { x: number; y: number }> = new Map();
+  private prevPinchDist: number | null = null;
+  private cameraDistance: number = 25.5;
 
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private pointer: THREE.Vector2 = new THREE.Vector2();
 
   private goalNames: string[] = [];
+
+  /**
+   * 화면 크기 및 UI 오버레이에 맞춘 최적 카메라 거리 계산
+   * (상단 헤더/안내 및 하단 컨트롤 바에 사다리 상/하단이 가려지지 않도록 보장)
+   */
+  public calculateOptimalCameraDistance(): number {
+    const w = this.canvas?.clientWidth || window.innerWidth;
+    const h = this.canvas?.clientHeight || window.innerHeight;
+    const aspect = w / h;
+
+    // 모바일(폭 768px 이하) 또는 세로 모드(aspect < 1.0)
+    if (w <= 768 || aspect < 1.0) {
+      return 29.0;
+    }
+    // 창 높이가 다소 낮은 모니터/노트북
+    if (h < 760) {
+      return 27.0;
+    }
+    // 일반 데스크톱 와이드 화면
+    return 25.5;
+  }
 
   public toggleTopView(): boolean {
     this.isTopView = !this.isTopView;
@@ -56,6 +80,7 @@ export class CylinderScene {
     this.canvas = canvas;
     this.ladder = ladder;
     this.runner = runner;
+    this.cameraDistance = this.calculateOptimalCameraDistance();
 
     // 1. 렌더러 설정
     this.renderer = new THREE.WebGLRenderer({
@@ -316,6 +341,18 @@ export class CylinderScene {
     const el = this.canvas;
 
     el.addEventListener('pointerdown', (e) => {
+      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // 모바일/태블릿 두 손가락 핀치 줌 감지
+      if (this.activePointers.size === 2) {
+        const [p1, p2] = Array.from(this.activePointers.values());
+        this.prevPinchDist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        this.isDrawingBridge = false;
+        this.isDraggingToRotate = false;
+        return;
+      }
+      if (this.activePointers.size > 2) return;
+
       this.updatePointer(e);
       this.prevPointerX = e.clientX;
       this.prevPointerY = e.clientY;
@@ -361,6 +398,24 @@ export class CylinderScene {
     });
 
     window.addEventListener('pointermove', (e) => {
+      if (this.activePointers.has(e.pointerId)) {
+        this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // 두 손가락 핀치 줌 (모바일/터치 화면)
+      if (this.activePointers.size === 2) {
+        const [p1, p2] = Array.from(this.activePointers.values());
+        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        if (this.prevPinchDist !== null) {
+          const delta = dist - this.prevPinchDist;
+          this.hasUserManuallyZoomed = true;
+          this.cameraDistance = Math.max(10, Math.min(45, this.cameraDistance - delta * 0.04));
+          this.camera.position.z = this.cameraDistance;
+        }
+        this.prevPinchDist = dist;
+        return;
+      }
+
       this.updatePointer(e);
 
       if (this.isDrawingBridge && this.drawStartCol !== null) {
@@ -423,7 +478,13 @@ export class CylinderScene {
       }
     });
 
-    window.addEventListener('pointerup', (e: PointerEvent) => {
+    const handlePointerUp = (e: PointerEvent) => {
+      this.activePointers.delete(e.pointerId);
+      if (this.activePointers.size < 2) {
+        this.prevPinchDist = null;
+      }
+      if (this.activePointers.size > 0) return;
+
       if (this.isDrawingBridge && this.drawStartCol !== null) {
         const railHit = this.raycastRail();
         const N = this.ladder.colCount;
@@ -462,12 +523,16 @@ export class CylinderScene {
       }
 
       this.isDraggingToRotate = false;
-    });
+    };
 
-    // 마우스 휠 줌 (초기 줌 18.5 기준 9 ~ 32 허용)
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    // 마우스 휠 줌 (초기 줌 25.5 기준 10 ~ 45 허용)
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.cameraDistance = Math.max(9, Math.min(32, this.cameraDistance + e.deltaY * 0.015));
+      this.hasUserManuallyZoomed = true;
+      this.cameraDistance = Math.max(10, Math.min(45, this.cameraDistance + e.deltaY * 0.015));
       this.camera.position.z = this.cameraDistance;
     });
 
@@ -563,6 +628,22 @@ export class CylinderScene {
 
   public resize() {
     this.updateWorkspaceOffset();
+    if (!this.hasUserManuallyZoomed) {
+      this.cameraDistance = this.calculateOptimalCameraDistance();
+      this.camera.position.z = this.cameraDistance;
+    }
+  }
+
+  /**
+   * 카메라 줌 및 시점 초기화 (사다리 전체가 한눈에 보이는 상태로 복귀)
+   */
+  public resetView() {
+    this.hasUserManuallyZoomed = false;
+    this.cameraDistance = this.calculateOptimalCameraDistance();
+    this.targetPitch = 0;
+    this.isTopView = false;
+    this.cylinderGroup.rotation.set(0, 0, 0);
+    this.camera.position.set(0, 0, this.cameraDistance);
   }
 
   /**
@@ -603,8 +684,8 @@ export class CylinderScene {
         const rotSpeed = 2.6;
         this.cylinderGroup.rotation.y += diff * Math.min(1.0, rotSpeed * dtSeconds);
 
-        // 카메라 수직 시점 추적 (완전 탑뷰일 때는 수직 이동 없이 중앙 유지)
-        const targetCamY = this.isTopView ? 0 : (H / 2 - focused.currentY) * 0.38;
+        // 카메라 수직 시점 추적 (완전 탑뷰일 때는 수직 이동 없이 중앙 유지, 0.28 계수로 상하단 항상 화면 유지)
+        const targetCamY = this.isTopView ? 0 : (H / 2 - focused.currentY) * 0.28;
         this.camera.position.y += (targetCamY - this.camera.position.y) * 1.8 * dtSeconds;
 
         // 카메라/시점 이동 중에는 마블 이동 속도를 0.5배속으로 늦춰서 안정적 관람 보장
