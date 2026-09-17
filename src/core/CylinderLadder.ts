@@ -22,7 +22,7 @@ export class CylinderLadder {
   public colCount: number;
   public height: number;
   public radius: number;
-  public taperRatio: number = 1.0; // 하단/상단 반경 비율 (기본값 1.0 = 균일 원통, 0.2~1.0 = 아래가 좁아지는 원뿔형)
+  public taperRatio: number = 1.0; // 하단/상단 반경 비율 (기본값 1.0 = 균일 원통, <1.0 = 아래 좁아짐, >1.0 = 아래 넓어짐)
   public bridges: LadderBridge[] = [];
 
   constructor(colCount: number = 6, height: number = 12, radius: number = 3.5, taperRatio: number = 1.0) {
@@ -49,7 +49,7 @@ export class CylinderLadder {
   }
 
   public setTaperRatio(ratio: number) {
-    this.taperRatio = Math.max(0.2, Math.min(1.0, ratio));
+    this.taperRatio = Math.max(0.2, Math.min(2.5, ratio));
   }
 
   public setColCount(count: number) {
