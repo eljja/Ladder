@@ -7,8 +7,8 @@
   <meta name="description" content="360도 원통형 구조로 공평하게 즐기는 3D 사다리 게임" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
-  <script type="module" crossorigin src="/Ladder/assets/index-CCRLUWUL.js"></script>
-  <link rel="stylesheet" crossorigin href="/Ladder/assets/index-6Whp2PFs.css">
+  <script type="module" crossorigin src="/Ladder/assets/index-B4-pjhdU.js"></script>
+  <link rel="stylesheet" crossorigin href="/Ladder/assets/index-U0mlfKNx.css">
 </head>
 <body>
   <div id="app">
@@ -119,7 +119,35 @@
           </div>
         </div>
 
-        <!-- 4. 도구 버튼 -->
+        <!-- 4. 테마 및 비주얼 -->
+        <div class="panel-box">
+          <div class="box-header">
+            <label for="sltTheme">🎨 3D 테마 스킨</label>
+          </div>
+          <div class="select-row">
+            <select id="sltTheme" class="full-width-select" title="사다리 3D 테마 스킨 선택">
+              <option value="neon">🌌 사이버펑크 네온 (기본)</option>
+              <option value="wooden">🪵 클래식 우든 타워</option>
+              <option value="space">🚀 스페이스 코스믹</option>
+            </select>
+          </div>
+          <div class="tools-grid" style="margin-top: 4px;">
+            <button type="button" id="btnToggleTrail" class="active btn-span-2" title="마블이 지나간 길에 발광 궤적 표시">✨ 네온 트레일: ON</button>
+          </div>
+        </div>
+
+        <!-- 5. 녹화 & 공유 -->
+        <div class="panel-box">
+          <div class="box-header">
+            <label>📹 녹화 & 공유</label>
+          </div>
+          <div class="tools-grid">
+            <button type="button" id="btnToggleRecord" title="경기 시작 시 자동 영상 녹화 및 종료 시 다운로드">📹 자동 녹화: OFF</button>
+            <button type="button" id="btnShareUrl" title="현재 사다리 설정 링크 복사">🔗 사다리 링크 복사</button>
+          </div>
+        </div>
+
+        <!-- 6. 도구 버튼 -->
         <div class="tools-grid">
           <button type="button" id="btnRandomize" title="새로운 무작위 다리 생성">🎲 랜덤 생성</button>
           <button type="button" id="btnClearBridges" title="모든 가로선 지우기">🧹 다리 비우기</button>
