@@ -65,7 +65,7 @@ export class LadderUI {
   private btnRestartSame!: HTMLButtonElement;
   private btnCloseModal!: HTMLButtonElement;
 
-  private activeResults: { name: string; goal: string }[] = [];
+  private activeResults: { name: string; goal: string; startCol: number }[] = [];
 
   constructor(ladder: CylinderLadder, runner: MarbleRunner, scene: CylinderScene) {
     this.ladder = ladder;
@@ -408,27 +408,25 @@ export class LadderUI {
 
     // 16. 당첨자 제외하고 다음 판 (서바이벌 모드)
     this.btnNextRoundExclude.addEventListener('click', () => {
-      // 1등 또는 당첨자 항목을 받은 참가자 제외
-      if (this.activeResults.length <= 1) {
-        this.showToast('남은 참가자가 1명 이하입니다.');
+      if (this.activeResults.length <= 2) {
+        this.showToast('남은 참가자가 2명 이하입니다. 더 이상 제외할 수 없습니다.');
         return;
       }
-      // 첫 번째 당첨자(또는 '당첨'/'1등' 포함자) 제외
+      // 당첨자 항목 우선 식별 (당첨, 1등, 1위, 승리, 합격, 커피, 선물, 통과 등)
       const winner =
-        this.activeResults.find((r) => r.goal.includes('당첨') || r.goal.includes('1등') || r.goal.includes('커피')) ||
-        this.activeResults[0];
+        this.activeResults.find(
+          (r) =>
+            r.goal.includes('당첨') ||
+            r.goal.includes('1등') ||
+            r.goal.includes('1위') ||
+            r.goal.includes('승리') ||
+            r.goal.includes('합격') ||
+            r.goal.includes('커피') ||
+            r.goal.includes('선물') ||
+            r.goal.includes('통과')
+        ) || this.activeResults[0];
 
-      const currentList = this.inNames.value
-        .split(/[,\n]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const nextList = currentList.filter((n) => n !== winner.name);
-
-      this.inNames.value = nextList.join(', ');
-      this.applyCurrentNamesAndGoals();
-      this.closeResultModal();
-      this.scene.resetView();
-      this.showToast(`⏭️ [${winner.name}]님을 제외하고 다음 판을 준비했습니다!`);
+      this.excludeParticipant(winner.name, winner.startCol, winner.goal);
     });
 
     // 17. 같은 명단으로 다시하기
@@ -511,28 +509,99 @@ export class LadderUI {
     return rawGoals[colIndex] || `골 #${colIndex + 1}`;
   }
 
+  /**
+   * 특정 참가자를 사다리 및 명단에서 제외하고 다음 판을 준비
+   * - ladder.removeColumn으로 한쪽 가로선 보존 및 2개 사다리 연결 보장
+   * - 당첨된 골(목적지)도 함께 제외하여 중복/불일치 에러 원천 차단
+   */
+  public excludeParticipant(winnerName: string, startCol: number, winnerGoal?: string) {
+    const currentNames = this.inNames.value
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (currentNames.length <= 2) {
+      this.showToast('⚠️ 최소 참가자 수는 2명입니다. 더 이상 제외할 수 없습니다.');
+      return;
+    }
+
+    // 1. 사다리에서 해당 기둥 제거 (가로선 한쪽 보존 및 남은 2개 사다리 연결 보장)
+    this.ladder.removeColumn(startCol);
+
+    // 2. 참가자 명단에서 해당 참가자 제거
+    const nextNames = currentNames.filter((n) => n !== winnerName);
+    this.inNames.value = nextNames.join(', ');
+
+    // 3. 골 명단에서도 당첨자가 차지한 골(목적지) 제거하여 다음 라운드와 동기화
+    const currentGoals = this.inGoals.value
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (winnerGoal) {
+      const gIdx = currentGoals.indexOf(winnerGoal);
+      if (gIdx >= 0) {
+        currentGoals.splice(gIdx, 1);
+      } else if (currentGoals.length > nextNames.length) {
+        currentGoals.pop();
+      }
+    } else if (currentGoals.length > nextNames.length) {
+      currentGoals.pop();
+    }
+    this.inGoals.value = currentGoals.join(', ');
+
+    // 4. 3D 씬 및 러너 재구축 (사다리 다리는 보존된 상태로 씬 재구성)
+    const goals: string[] = [];
+    for (let i = 0; i < nextNames.length; i++) {
+      goals.push(currentGoals[i] || `골 #${i + 1}`);
+    }
+    this.scene.setGoalNames(goals);
+    this.scene.buildCylinderStructure();
+
+    this.runner.setParticipants(nextNames);
+    this.runner.reset();
+
+    this.closeResultModal();
+    this.scene.resetView();
+    this.showToast(`⏭️ [${winnerName}] ➔ [${winnerGoal || '당첨'}] 제외 완료! (남은 참가자: ${nextNames.length}명)`);
+  }
+
   private showResultModal() {
     this.activeResults = [];
     this.resultList.innerHTML = '';
 
-    // 실제 사다리 경로를 시뮬레이션 계산하여 결과 정리
+    // 실제 사다리 경로 계산 및 1:1 매칭 무결성 검증
     const solutions = LadderSolver.solveAll(this.ladder);
+    const rawGoals = this.inGoals.value
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     solutions.forEach((sol) => {
       const marble = this.runner.marbles.find((m) => m.startCol === sol.startCol);
       const name = marble ? marble.name : `참가자 ${sol.startCol + 1}`;
-      const finalCol = marble?.finalCol !== undefined ? marble.finalCol : sol.finalCol;
-      const goal = this.getGoalName(finalCol);
+      // 완주된 마블의 기둥 우선 사용 (동시/개별 모드 완결성 보장)
+      const finalCol = marble && marble.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
+      const goal = rawGoals[finalCol] || `골 #${finalCol + 1}`;
 
-      this.activeResults.push({ name, goal });
+      this.activeResults.push({ name, goal, startCol: sol.startCol });
 
       const item = document.createElement('div');
       item.className = 'result-item';
       item.innerHTML = `
-        <span class="res-name">${name}</span>
-        <span class="res-arrow">➔</span>
-        <span class="res-goal">${goal}</span>
+        <div class="result-item-main">
+          <span class="res-name">${name}</span>
+          <span class="res-arrow">➔</span>
+          <span class="res-goal">${goal}</span>
+        </div>
+        <button type="button" class="btn-item-exclude" title="${name}님 제외하고 다음 판">제외</button>
       `;
+
+      const btnExclude = item.querySelector('.btn-item-exclude') as HTMLButtonElement;
+      btnExclude.addEventListener('click', () => {
+        this.excludeParticipant(name, sol.startCol, goal);
+      });
+
       this.resultList.appendChild(item);
     });
 

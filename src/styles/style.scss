@@ -535,26 +535,52 @@ body, html {
         justify-content: space-between;
         background: rgba(255, 255, 255, 0.04);
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 8px 14px;
         border-left: 4px solid #ffd700;
 
-        .res-name {
-          font-weight: 700;
-          color: #fff;
-          font-size: 15px;
+        .result-item-main {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+
+          .res-name {
+            font-weight: 700;
+            color: #fff;
+            font-size: 15px;
+          }
+
+          .res-arrow {
+            color: #8b949e;
+            font-size: 13px;
+          }
+
+          .res-goal {
+            font-weight: 700;
+            color: #ffd700;
+            font-size: 15px;
+          }
         }
 
-        .res-arrow {
-          color: #8b949e;
-          font-size: 13px;
-        }
+        .btn-item-exclude {
+          padding: 4px 9px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          background: rgba(239, 68, 68, 0.15);
+          color: #fca5a5;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          cursor: pointer;
+          transition: all 0.15s;
 
-        .res-goal {
-          font-weight: 700;
-          color: #ffd700;
-          font-size: 15px;
+          &:hover {
+            background: rgba(239, 68, 68, 0.35);
+            border-color: #f87171;
+            color: #fff;
+            transform: translateY(-1px);
+          }
         }
       }
+
     }
 
     .modal-actions {

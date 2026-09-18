@@ -183,7 +183,7 @@ export class CylinderScene {
     const H = this.ladder.height;
 
     // 1. 중심 반투명 다크 글래스 코어 (상/하단 테이퍼 반영, 구슬 중심이 선에 위치할 때 구슬 뒤쪽에 자연스럽게 배치)
-    const coreOffset = 0.30;
+    const coreOffset = 0.3;
     const coreGeom = new THREE.CylinderGeometry(
       Math.max(0.2, Rtop - coreOffset),
       Math.max(0.2, Rbot - coreOffset),
@@ -289,11 +289,7 @@ export class CylinderScene {
   /**
    * 단일 다리 3D 곡면 튜브 생성 (원통 둘레 호를 따라 매끄럽게 연결)
    */
-  private createBridgeMesh(
-    bridge: LadderBridge,
-    isPreview: boolean = false,
-    isValid: boolean = true
-  ): THREE.Mesh {
+  private createBridgeMesh(bridge: LadderBridge, isPreview: boolean = false, isValid: boolean = true): THREE.Mesh {
     const N = this.ladder.colCount;
     const H = this.ladder.height;
 

@@ -165,9 +165,20 @@ export class MarbleRunner extends EventTarget {
   public update(dtSeconds: number) {
     if (!this.isRunning) return;
 
-    const N = this.ladder.colCount;
-    // 카메라/시점 이동 중에는 0.5배속 적용
+    // 최대 0.016초(60fps) 단위로 서브스텝 분할하여 고속 배속(3x) 및 프레임 드랍 시에도 완벽한 물리 정밀도 유지
     const effectiveDt = dtSeconds * this.trackingCatchupFactor;
+    const maxSubStep = 0.016;
+    const subSteps = Math.max(1, Math.min(8, Math.ceil(effectiveDt / maxSubStep)));
+    const subDt = effectiveDt / subSteps;
+
+    for (let s = 0; s < subSteps; s++) {
+      this._subStepUpdate(subDt);
+      if (!this.isRunning) break;
+    }
+  }
+
+  private _subStepUpdate(dt: number) {
+    const N = this.ladder.colCount;
     const baseSpeed = 2.4 * this.speedMultiplier; // 기본 하강 속도
     let anyRunning = false;
 
@@ -178,7 +189,7 @@ export class MarbleRunner extends EventTarget {
       if (m.isTraversingBridge) {
         // 다리를 건너는 중
         const bridgeSpeed = 2.1 * this.speedMultiplier;
-        m.bridgeProgress += bridgeSpeed * effectiveDt;
+        m.bridgeProgress += bridgeSpeed * dt;
 
         if (m.bridgeProgress >= 1.0) {
           // 다리 건너기 완료 -> 대상 기둥 도착
@@ -205,7 +216,7 @@ export class MarbleRunner extends EventTarget {
         m.currentAngle = (m.currentCol / N) * Math.PI * 2;
         const nextBridge = this.ladder.getNextBridge(m.currentCol, m.currentY, m.lastBridgeId);
 
-        if (nextBridge && m.currentY + baseSpeed * effectiveDt >= nextBridge.enterY) {
+        if (nextBridge && m.currentY + baseSpeed * dt >= nextBridge.enterY) {
           // 다리 입구 도달!
           m.currentY = nextBridge.enterY;
           m.isTraversingBridge = true;
@@ -219,7 +230,7 @@ export class MarbleRunner extends EventTarget {
 
           soundManager.playSlide(1.0 + (m.id % 5) * 0.1);
         } else {
-          m.currentY += baseSpeed * effectiveDt;
+          m.currentY += baseSpeed * dt;
           if (m.currentY >= this.ladder.height) {
             // 골인 도달!
             m.currentY = this.ladder.height;
