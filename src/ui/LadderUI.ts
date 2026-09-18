@@ -161,6 +161,10 @@ export class LadderUI {
   private bindEvents() {
     // 1. 프리셋 선택
     this.sltPreset.addEventListener('change', () => {
+      if (this.runner.isRunning) {
+        this.showToast('⚠️ 경기가 진행 중일 때는 프리셋을 변경할 수 없습니다.');
+        return;
+      }
       const val = this.sltPreset.value;
       if (!val) return;
       let preset: { names: string; goals: string } | null = null;
@@ -186,7 +190,7 @@ export class LadderUI {
         return;
       }
       const title = prompt('저장할 프리셋 이름을 입력하세요:');
-      if (!title || !title.trim()) return;
+      if (!title?.trim()) return;
       const key = title.trim();
       const custom = this.getCustomPresets();
       custom[key] = { names, goals };
@@ -216,13 +220,25 @@ export class LadderUI {
       }
     });
 
-    // 4. 이름/결과 입력 변경 감지
+    // 4. 이름/결과 입력 변경 감지 (실시간 동기화 + 포커스 아웃 보장)
+    let inputDebounceTimer: any = null;
+    const handleInputChange = () => {
+      if (this.runner.isRunning) return;
+      clearTimeout(inputDebounceTimer);
+      inputDebounceTimer = setTimeout(() => {
+        this.applyCurrentNamesAndGoals();
+      }, 250);
+    };
+
+    this.inNames.addEventListener('input', handleInputChange);
+    this.inGoals.addEventListener('input', handleInputChange);
     this.inNames.addEventListener('change', () => this.applyCurrentNamesAndGoals());
     this.inGoals.addEventListener('change', () => this.applyCurrentNamesAndGoals());
 
-    // 5. 전체 동시 출발
+    // 5. 전체 동시 출발 (출발 전 입력값 최종 동기화 보장)
     this.btnStartSimul.addEventListener('click', () => {
       if (this.runner.isRunning) return;
+      this.applyCurrentNamesAndGoals();
       this.runner.startSimultaneous();
       this.showToast('🚀 모든 마블 동시 출발!');
     });
@@ -249,8 +265,12 @@ export class LadderUI {
       this.showToast('🔄 사다리가 리셋되었습니다.');
     });
 
-    // 8. 다리 랜덤 재생성
+    // 8. 다리 랜덤 재생성 (경기 진행 중 차단)
     this.btnRandomize.addEventListener('click', () => {
+      if (this.runner.isRunning) {
+        this.showToast('⚠️ 경기가 진행 중일 때는 사다리를 변경할 수 없습니다.');
+        return;
+      }
       const density = parseFloat(this.sliderDensity.value);
       this.ladder.generateRandomBridges(density);
       this.scene.rebuildBridges();
@@ -263,6 +283,7 @@ export class LadderUI {
       const val = parseFloat(this.sliderTaper.value);
       this.ladder.setTaperRatio(val);
       this.scene.buildCylinderStructure();
+
 
       let desc = '';
       if (Math.abs(val - 1.0) < 0.02) {
@@ -362,13 +383,15 @@ export class LadderUI {
     this.btnToggleCamLock?.addEventListener('click', handleCamLockToggle);
     this.btnToggleCamLockSidebar?.addEventListener('click', handleCamLockToggle);
 
-    // 12. 골인 이벤트 리스너
+    // 12. 골인 이벤트 리스너 (동시 출발 모드 시 골인 알림)
     this.runner.addEventListener('marbleGoal', (e: any) => {
+      if (this.runner.mode === 'individual') return; // 개별 모드는 singleFinish에서 처리
       const m = e.detail.marble;
       ConfettiManager.shoot();
       const goalText = this.getGoalName(m.finalCol);
       this.showToast(`🏁 ${m.name} ➔ [${goalText}] 도착!`);
     });
+
 
     // 13. 개별 마블 완료 이벤트 (개별 모드에서는 결과를 바로 띄우지 않고 토스트 및 폭죽만)
     this.runner.addEventListener('singleFinish', (e: any) => {
@@ -502,6 +525,10 @@ export class LadderUI {
 
   private getGoalName(colIndex?: number): string {
     if (colIndex === undefined) return '';
+    // 3D 씬 화면 바닥에 렌더링된 골 이름을 1순위로 사용하여 100% 일치 보장
+    if (this.scene && (this.scene as any).goalNames && (this.scene as any).goalNames[colIndex]) {
+      return (this.scene as any).goalNames[colIndex];
+    }
     const rawGoals = this.inGoals.value
       .split(/[,\n]/)
       .map((s) => s.trim())
@@ -563,7 +590,9 @@ export class LadderUI {
 
     this.closeResultModal();
     this.scene.resetView();
-    this.showToast(`⏭️ [${winnerName}] ➔ [${winnerGoal || '당첨'}] 제외 완료! (남은 참가자: ${nextNames.length}명)`);
+    this.showToast(
+      `⏭️ [${winnerName}] ➔ [${winnerGoal || '당첨'}] 제외 완료! (남은 참가자: ${nextNames.length}명)`
+    );
   }
 
   private showResultModal() {
@@ -572,17 +601,31 @@ export class LadderUI {
 
     // 실제 사다리 경로 계산 및 1:1 매칭 무결성 검증
     const solutions = LadderSolver.solveAll(this.ladder);
-    const rawGoals = this.inGoals.value
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+
+    // 1:1 매칭(전단사) 중복 여부 사전 검사
+    // 혹시라도 물리 엔진 프레임 글리치 등으로 중복이 감지되면 수학적 솔버 결과(solutions)로 자동 복구!
+    const seenCols = new Set<number>();
+    let hasDuplicate = false;
+    for (const sol of solutions) {
+      const marble = this.runner.marbles.find((m) => m.startCol === sol.startCol);
+      const col = marble && marble.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
+      if (seenCols.has(col)) {
+        hasDuplicate = true;
+        break;
+      }
+      seenCols.add(col);
+    }
 
     solutions.forEach((sol) => {
       const marble = this.runner.marbles.find((m) => m.startCol === sol.startCol);
       const name = marble ? marble.name : `참가자 ${sol.startCol + 1}`;
-      // 완주된 마블의 기둥 우선 사용 (동시/개별 모드 완결성 보장)
-      const finalCol = marble && marble.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
-      const goal = rawGoals[finalCol] || `골 #${finalCol + 1}`;
+
+      // 중복이 없으면 완주된 마블의 기둥을 쓰고, 중복 감지 시 솔버 결과로 100% 안전 보정
+      const finalCol =
+        !hasDuplicate && marble && marble.isFinished && marble.finalCol !== undefined
+          ? marble.finalCol
+          : sol.finalCol;
+      const goal = this.getGoalName(finalCol);
 
       this.activeResults.push({ name, goal, startCol: sol.startCol });
 

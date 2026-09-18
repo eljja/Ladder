@@ -437,18 +437,20 @@ export class CylinderScene {
         return;
       }
 
-      // 2. 기존 다리 클릭 시 삭제
-      const clickedBridgeId = this.raycastBridge();
-      if (clickedBridgeId) {
-        this.ladder.removeBridge(clickedBridgeId);
-        soundManager.playBridgeRemove();
-        this.rebuildBridges();
-        return;
+      // 2. 기존 다리 클릭 시 삭제 (경기 미진행 시만 허용)
+      if (!this.runner.isRunning) {
+        const clickedBridgeId = this.raycastBridge();
+        if (clickedBridgeId) {
+          this.ladder.removeBridge(clickedBridgeId);
+          soundManager.playBridgeRemove();
+          this.rebuildBridges();
+          return;
+        }
       }
 
-      // 3. 기둥 표면 클릭 시 다리 그리기 시작
+      // 3. 기둥 표면 클릭 시 다리 그리기 시작 (경기 미진행 시만 허용)
       const railHit = this.raycastRail();
-      if (railHit && this.isEditMode) {
+      if (railHit && this.isEditMode && !this.runner.isRunning) {
         this.isDrawingBridge = true;
         this.drawStartCol = railHit.colIndex;
         this.drawStartY = railHit.ladderY;
