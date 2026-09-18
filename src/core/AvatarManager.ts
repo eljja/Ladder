@@ -113,6 +113,15 @@ export class AvatarManager {
     });
   }
 
+  public static clearAll(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear avatars from localStorage:', e);
+    }
+    AvatarManager.cache.clear();
+  }
+
   /**
    * Three.js 3D Sphere에 매핑할 CanvasTexture 생성
    */
@@ -133,6 +142,7 @@ export class AvatarManager {
     ctx.fillRect(0, 0, 256, 256);
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace; // 표준 sRGB 컬러 스페이스 지정 (피부색 왜곡 방지)
 
     const img = new Image();
     img.onload = () => {
@@ -142,7 +152,7 @@ export class AvatarManager {
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 4;
         ctx.strokeStyle = '#ffd700';
         ctx.stroke();
         ctx.clip();
@@ -152,9 +162,9 @@ export class AvatarManager {
       };
 
       // 앞면 (128, 128) 및 뒷면 (0/256) 모두에 얼굴 배치하여 360도 회전 시 어디서든 얼굴이 잘 보이도록 처리
-      drawFace(128, 128, 75);
-      drawFace(0, 128, 65);
-      drawFace(256, 128, 65);
+      drawFace(128, 128, 85);
+      drawFace(0, 128, 70);
+      drawFace(256, 128, 70);
 
       texture.needsUpdate = true;
     };

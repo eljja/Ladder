@@ -43,6 +43,7 @@ export class LadderUI {
   private sltPreset!: HTMLSelectElement;
   private btnSavePreset!: HTMLButtonElement;
   private btnDeletePreset!: HTMLButtonElement;
+  private btnClearAllAvatars!: HTMLButtonElement;
 
   private sltTheme!: HTMLSelectElement;
   private btnToggleTrail!: HTMLButtonElement;
@@ -110,6 +111,7 @@ export class LadderUI {
     this.sltPreset = document.querySelector('#sltPreset')!;
     this.btnSavePreset = document.querySelector('#btnSavePreset')!;
     this.btnDeletePreset = document.querySelector('#btnDeletePreset')!;
+    this.btnClearAllAvatars = document.querySelector('#btnClearAllAvatars')!;
 
     this.sltTheme = document.querySelector('#sltTheme')!;
     this.btnToggleTrail = document.querySelector('#btnToggleTrail')!;
@@ -591,6 +593,15 @@ export class LadderUI {
 
     window.addEventListener('resize', () => {
       this.scene.updateWorkspaceOffset();
+    });
+
+    // 20. 전체 마블 사진 초기화
+    this.btnClearAllAvatars?.addEventListener('click', () => {
+      if (confirm('등록된 모든 마블 얼굴 사진을 초기화하시겠습니까?')) {
+        AvatarManager.clearAll();
+        this.scene.refreshAllAvatars();
+        this.showToast('🗑️ 모든 마블 얼굴 사진이 초기화되었습니다.');
+      }
     });
   }
 

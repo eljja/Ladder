@@ -27,10 +27,11 @@ export class MarbleMesh {
     const mat = new THREE.MeshStandardMaterial({
       color: avatarTex ? 0xffffff : new THREE.Color(state.color),
       map: avatarTex || null,
-      emissive: avatarTex ? new THREE.Color(0x333333) : new THREE.Color(state.color),
-      emissiveIntensity: avatarTex ? 0.2 : 0.35,
-      roughness: 0.15,
-      metalness: 0.25,
+      emissive: avatarTex ? new THREE.Color(0xffffff) : new THREE.Color(state.color),
+      emissiveMap: avatarTex || null,
+      emissiveIntensity: avatarTex ? 0.75 : 0.35,
+      roughness: avatarTex ? 0.4 : 0.15,
+      metalness: avatarTex ? 0.0 : 0.25,
     });
     this.sphereMesh = new THREE.Mesh(geom, mat);
     this.sphereMesh.castShadow = true;
@@ -174,14 +175,20 @@ export class MarbleMesh {
     if (avatarTex) {
       mat.map = avatarTex;
       mat.color.setHex(0xffffff);
-      mat.emissive.setHex(0x333333);
-      mat.emissiveIntensity = 0.2;
+      mat.emissive.setHex(0xffffff);
+      mat.emissiveMap = avatarTex;
+      mat.emissiveIntensity = 0.75;
+      mat.metalness = 0.0;
+      mat.roughness = 0.4;
       mat.needsUpdate = true;
     } else {
       mat.map = null;
+      mat.emissiveMap = null;
       mat.color.set(this.marbleColor);
       mat.emissive.set(this.marbleColor);
       mat.emissiveIntensity = 0.35;
+      mat.metalness = 0.25;
+      mat.roughness = 0.15;
       mat.needsUpdate = true;
     }
   }
