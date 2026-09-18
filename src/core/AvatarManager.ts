@@ -48,9 +48,13 @@ export class AvatarManager {
   }
 
   /**
-   * 클립보드 Blob을 받아 중앙 정사각형 크롭 & 160x160 원형 아바타로 리사이즈하여 DataURL 반환
+   * 클립보드 Blob 또는 File을 받아 증명사진에 최적화된 스마트 크롭 & 160x160 원형 아바타로 DataURL 반환
    */
-  public static async processImageBlob(blob: Blob): Promise<string> {
+  public static async processImageBlob(
+    blob: Blob,
+    zoom: number = 1.2,
+    offsetYRatio: number = 0.43
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(blob);
@@ -62,10 +66,22 @@ export class AvatarManager {
         canvas.height = size;
         const ctx = canvas.getContext('2d')!;
 
-        // 중앙 정사각형 크롭 영역 계산 (증명사진 인물 중심)
-        const minDim = Math.min(img.width, img.height);
-        const sx = (img.width - minDim) / 2;
-        const sy = (img.height - minDim) / 2;
+        // 인물 얼굴 중심 증명사진 스마트 크롭 계산
+        const baseCropSize = Math.min(img.width, img.height);
+        const cropSize = baseCropSize / Math.max(0.5, Math.min(2.5, zoom));
+
+        // 가로는 중앙, 세로는 인물 얼굴 중심(상단 42~45% 지점)
+        const cx = img.width / 2;
+        const cy = img.height * offsetYRatio;
+
+        let sx = cx - cropSize / 2;
+        let sy = cy - cropSize / 2;
+
+        // 경계 제한 (클램프)
+        if (sx < 0) sx = 0;
+        if (sy < 0) sy = 0;
+        if (sx + cropSize > img.width) sx = Math.max(0, img.width - cropSize);
+        if (sy + cropSize > img.height) sy = Math.max(0, img.height - cropSize);
 
         // 원형 클리핑 영역
         ctx.beginPath();
@@ -76,10 +92,17 @@ export class AvatarManager {
         // 부드러운 이미지 축소 렌더링
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, size, size);
+
+        // 부드러운 외곽선
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
         // WebP 압축 저장 (약 3~5KB)
-        const dataUrl = canvas.toDataURL('image/webp', 0.88);
+        const dataUrl = canvas.toDataURL('image/webp', 0.9);
         resolve(dataUrl);
       };
       img.onerror = (err) => {
