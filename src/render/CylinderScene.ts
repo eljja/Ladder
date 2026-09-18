@@ -4,6 +4,112 @@ import type { MarbleRunner } from '../core/MarbleRunner';
 import { soundManager } from '../core/SoundManager';
 import { MarbleMesh } from './MarbleMesh';
 
+export type LadderTheme = 'neon' | 'wooden' | 'space';
+
+export interface ThemeConfig {
+  name: LadderTheme;
+  ambientColor: number;
+  ambientIntensity: number;
+  dir1Color: number;
+  dir1Intensity: number;
+  dir2Color: number;
+  dir2Intensity: number;
+  railColor: number;
+  railEmissive: number;
+  railEmissiveIntensity: number;
+  railRoughness: number;
+  railMetalness: number;
+  ringColor: number;
+  ringEmissive: number;
+  ringEmissiveIntensity: number;
+  ringRoughness: number;
+  ringMetalness: number;
+  coreColor: number;
+  coreOpacity: number;
+  coreRoughness: number;
+  coreMetalness: number;
+  bridgeHorizontalColor: number;
+  bridgeDiagonalColor: number;
+}
+
+export const THEMES: Record<LadderTheme, ThemeConfig> = {
+  neon: {
+    name: 'neon',
+    ambientColor: 0x223344,
+    ambientIntensity: 1.2,
+    dir1Color: 0x00e5ff,
+    dir1Intensity: 1.8,
+    dir2Color: 0xff007f,
+    dir2Intensity: 0.4,
+    railColor: 0x38bdf8,
+    railEmissive: 0x0284c7,
+    railEmissiveIntensity: 0.6,
+    railRoughness: 0.2,
+    railMetalness: 0.8,
+    ringColor: 0x00e5ff,
+    ringEmissive: 0x00e5ff,
+    ringEmissiveIntensity: 0.5,
+    ringRoughness: 0.2,
+    ringMetalness: 0.7,
+    coreColor: 0x080d16,
+    coreOpacity: 0.4,
+    coreRoughness: 0.35,
+    coreMetalness: 0.15,
+    bridgeHorizontalColor: 0x00ffcc,
+    bridgeDiagonalColor: 0xff007f,
+  },
+  wooden: {
+    name: 'wooden',
+    ambientColor: 0x5a4632,
+    ambientIntensity: 1.6,
+    dir1Color: 0xffeed0,
+    dir1Intensity: 2.0,
+    dir2Color: 0x966840,
+    dir2Intensity: 0.6,
+    railColor: 0xa06d44,
+    railEmissive: 0x482d18,
+    railEmissiveIntensity: 0.25,
+    railRoughness: 0.75,
+    railMetalness: 0.1,
+    ringColor: 0xd4af37,
+    ringEmissive: 0x6b531c,
+    ringEmissiveIntensity: 0.4,
+    ringRoughness: 0.35,
+    ringMetalness: 0.8,
+    coreColor: 0x2e1f16,
+    coreOpacity: 0.7,
+    coreRoughness: 0.8,
+    coreMetalness: 0.05,
+    bridgeHorizontalColor: 0xc89658,
+    bridgeDiagonalColor: 0xe07a3c,
+  },
+  space: {
+    name: 'space',
+    ambientColor: 0x23143f,
+    ambientIntensity: 1.4,
+    dir1Color: 0x38bdf8,
+    dir1Intensity: 1.9,
+    dir2Color: 0xd946ef,
+    dir2Intensity: 0.7,
+    railColor: 0x818cf8,
+    railEmissive: 0x4f46e5,
+    railEmissiveIntensity: 0.75,
+    railRoughness: 0.2,
+    railMetalness: 0.85,
+    ringColor: 0xec4899,
+    ringEmissive: 0xdb2777,
+    ringEmissiveIntensity: 0.7,
+    ringRoughness: 0.2,
+    ringMetalness: 0.9,
+    coreColor: 0x030718,
+    coreOpacity: 0.55,
+    coreRoughness: 0.2,
+    coreMetalness: 0.4,
+    bridgeHorizontalColor: 0x06b6d4,
+    bridgeDiagonalColor: 0xa855f7,
+  },
+};
+
 export class CylinderScene {
   public canvas: HTMLCanvasElement;
   public renderer: THREE.WebGLRenderer;
@@ -13,6 +119,19 @@ export class CylinderScene {
 
   public ladder: CylinderLadder;
   public runner: MarbleRunner;
+
+  // 3D 조명
+  private ambientLight: THREE.AmbientLight;
+  private dirLight1: THREE.DirectionalLight;
+  private dirLight2: THREE.DirectionalLight;
+
+  // 3D 테마 스킨
+  public currentTheme: LadderTheme = 'neon';
+
+  // 네온 궤적 라이트 트레일
+  public isNeonTrailEnabled: boolean = true;
+  private trailGroup: THREE.Group;
+  private marbleTrails: Map<number, { points: THREE.Vector3[]; mesh: THREE.Mesh | null; color: string }> = new Map();
 
   private marbleMeshes: Map<number, MarbleMesh> = new Map();
   private bridgeMeshes: Map<string, THREE.Mesh> = new Map();
@@ -110,21 +229,31 @@ export class CylinderScene {
     this.camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
     this.camera.position.set(0, 0, this.cameraDistance);
 
-    // 3. 조명 (전면 네온 강조 + 후면 은은한 필라이트)
-    const ambientLight = new THREE.AmbientLight(0x223344, 1.2);
-    this.scene.add(ambientLight);
+    // 3. 조명 (테마 연동 초기화)
+    const cfg = THEMES[this.currentTheme];
+    this.ambientLight = new THREE.AmbientLight(cfg.ambientColor, cfg.ambientIntensity);
+    this.scene.add(this.ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0x00e5ff, 1.8);
-    dirLight1.position.set(0, 10, 12);
-    this.scene.add(dirLight1);
+    this.dirLight1 = new THREE.DirectionalLight(cfg.dir1Color, cfg.dir1Intensity);
+    this.dirLight1.position.set(0, 10, 12);
+    this.scene.add(this.dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0xff007f, 0.4);
-    dirLight2.position.set(-5, -5, -8);
-    this.scene.add(dirLight2);
+    this.dirLight2 = new THREE.DirectionalLight(cfg.dir2Color, cfg.dir2Intensity);
+    this.dirLight2.position.set(-5, -5, -8);
+    this.scene.add(this.dirLight2);
 
     // 4. 중심 실린더 그룹 (모든 사다리 부속은 이 그룹의 자식)
     this.cylinderGroup = new THREE.Group();
     this.scene.add(this.cylinderGroup);
+
+    // 4-1. 네온 궤적 트레일 그룹 (실린더 회전과 항상 동기화)
+    this.trailGroup = new THREE.Group();
+    this.cylinderGroup.add(this.trailGroup);
+
+    // 러너 출발/리셋 이벤트 시 이전 트레일 초기화
+    this.runner.addEventListener('start', () => {
+      this.clearTrails();
+    });
 
     this.updateWorkspaceOffset();
     this.buildCylinderStructure();
@@ -181,6 +310,7 @@ export class CylinderScene {
     const Rtop = this.ladder.radiusTop;
     const Rbot = this.ladder.radiusBottom;
     const H = this.ladder.height;
+    const themeConfig = THEMES[this.currentTheme] || THEMES.neon;
 
     // 1. 중심 반투명 다크 글래스 코어 (상/하단 테이퍼 반영, 구슬 중심이 선에 위치할 때 구슬 뒤쪽에 자연스럽게 배치)
     const coreOffset = 0.3;
@@ -193,11 +323,11 @@ export class CylinderScene {
       true
     );
     const coreMat = new THREE.MeshStandardMaterial({
-      color: 0x080d16,
-      roughness: 0.35,
-      metalness: 0.15,
+      color: themeConfig.coreColor,
+      roughness: themeConfig.coreRoughness,
+      metalness: themeConfig.coreMetalness,
       transparent: true,
-      opacity: 0.4,
+      opacity: themeConfig.coreOpacity,
       side: THREE.DoubleSide,
     });
     this.coreMesh = new THREE.Mesh(coreGeom, coreMat);
@@ -216,14 +346,14 @@ export class CylinderScene {
       const pBot = new THREE.Vector3(xBot, -H / 2, zBot);
       const curve = new THREE.LineCurve3(pTop, pBot);
 
-      // (1) 시각적 얇은 네온 레일 (반지름 0.065)
+      // (1) 시각적 얇은 레일 (반지름 0.065)
       const railGeom = new THREE.TubeGeometry(curve, 2, 0.065, 8, false);
       const railMat = new THREE.MeshStandardMaterial({
-        color: 0x38bdf8,
-        emissive: 0x0284c7,
-        emissiveIntensity: 0.6,
-        roughness: 0.2,
-        metalness: 0.8,
+        color: themeConfig.railColor,
+        emissive: themeConfig.railEmissive,
+        emissiveIntensity: themeConfig.railEmissiveIntensity,
+        roughness: themeConfig.railRoughness,
+        metalness: themeConfig.railMetalness,
       });
 
       const rail = new THREE.Mesh(railGeom, railMat);
@@ -244,12 +374,14 @@ export class CylinderScene {
       this.railHitMeshes.push(hitProxy);
     }
 
-    // 3. 상단 및 하단 네온 링 장식
+    // 3. 상단 및 하단 링 장식
     const topRingGeom = new THREE.TorusGeometry(Rtop, 0.08, 16, 64);
     const ringMat = new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
-      emissive: 0x00e5ff,
-      emissiveIntensity: 0.5,
+      color: themeConfig.ringColor,
+      emissive: themeConfig.ringEmissive,
+      emissiveIntensity: themeConfig.ringEmissiveIntensity,
+      roughness: themeConfig.ringRoughness,
+      metalness: themeConfig.ringMetalness,
     });
     this.topRingMesh = new THREE.Mesh(topRingGeom, ringMat);
     this.topRingMesh.rotation.x = Math.PI / 2;
@@ -320,12 +452,11 @@ export class CylinderScene {
     const tubeGeom = new THREE.TubeGeometry(curve, 16, isPreview ? 0.08 : 0.06, 8, false);
 
     let color: number;
+    const themeConfig = THEMES[this.currentTheme] || THEMES.neon;
     if (isPreview) {
       color = isValid ? 0xffd700 : 0xff3366; // 유효: 밝은 골드, 충돌/불가: 네온 레드
     } else {
-      color = bridge.isDiagonal
-        ? 0xff007f // 대각선 다리: 핫핑크
-        : 0x00ffcc; // 수평 다리: 네온 민트
+      color = bridge.isDiagonal ? themeConfig.bridgeDiagonalColor : themeConfig.bridgeHorizontalColor;
     }
 
     const tubeMat = new THREE.MeshStandardMaterial({
@@ -387,7 +518,7 @@ export class CylinderScene {
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 28px "Pretendard", sans-serif';
     ctx.fillStyle = '#ffd700';
-    const display = text.length > 8 ? text.slice(0, 7) + '…' : text;
+    const display = text.length > 8 ? `${text.slice(0, 7)}…` : text;
     ctx.fillText(display, 128, 40);
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -720,6 +851,189 @@ export class CylinderScene {
   }
 
   /**
+   * 3D 테마 스킨 실시간 변경
+   */
+  public setTheme(theme: LadderTheme) {
+    if (!THEMES[theme]) return;
+    this.currentTheme = theme;
+    const cfg = THEMES[theme];
+
+    this.ambientLight.color.setHex(cfg.ambientColor);
+    this.ambientLight.intensity = cfg.ambientIntensity;
+    this.dirLight1.color.setHex(cfg.dir1Color);
+    this.dirLight1.intensity = cfg.dir1Intensity;
+    this.dirLight2.color.setHex(cfg.dir2Color);
+    this.dirLight2.intensity = cfg.dir2Intensity;
+
+    this.buildCylinderStructure();
+  }
+
+  /**
+   * 네온 궤적 라이트 트레일 ON/OFF 토글
+   */
+  public toggleNeonTrail(enable?: boolean): boolean {
+    this.isNeonTrailEnabled = enable !== undefined ? enable : !this.isNeonTrailEnabled;
+    this.trailGroup.visible = this.isNeonTrailEnabled;
+    return this.isNeonTrailEnabled;
+  }
+
+  /**
+   * 모든 네온 트레일 제거 및 메모리 해제
+   */
+  public clearTrails() {
+    for (const trail of this.marbleTrails.values()) {
+      if (trail.mesh) {
+        this.trailGroup.remove(trail.mesh);
+        trail.mesh.geometry.dispose();
+        (trail.mesh.material as THREE.Material).dispose();
+      }
+    }
+    this.marbleTrails.clear();
+  }
+
+  /**
+   * 마블 이동 궤적을 3D 네온 리본 메시로 실시간 렌더링
+   */
+  private updateNeonTrails() {
+    if (!this.isNeonTrailEnabled) return;
+
+    const H = this.ladder.height;
+
+    for (const m of this.runner.marbles) {
+      if (!m.isActive) continue;
+
+      const angle = m.currentAngle;
+      const r = this.ladder.getRadiusAt(m.currentY);
+      const x = r * Math.sin(angle);
+      const y = H / 2 - m.currentY;
+      const z = r * Math.cos(angle);
+      const currentPos = new THREE.Vector3(x, y, z);
+
+      let trail = this.marbleTrails.get(m.id);
+      if (!trail) {
+        trail = { points: [currentPos], mesh: null, color: m.color };
+        this.marbleTrails.set(m.id, trail);
+      }
+
+      const lastPoint = trail.points[trail.points.length - 1];
+      const dist = currentPos.distanceTo(lastPoint);
+
+      if (dist >= 0.07 || (m.isFinished && dist > 0.01)) {
+        trail.points.push(currentPos);
+        this.refreshTrailMesh(trail);
+      }
+    }
+  }
+
+  private refreshTrailMesh(trail: { points: THREE.Vector3[]; mesh: THREE.Mesh | null; color: string }) {
+    const pts = trail.points;
+    const count = pts.length;
+    if (count < 2) return;
+
+    const positions = new Float32Array(count * 2 * 3);
+    const indices = new Uint16Array((count - 1) * 6);
+    const halfWidth = 0.048;
+    const surfaceOffset = 0.035;
+
+    for (let i = 0; i < count; i++) {
+      const p = pts[i];
+      const angle = Math.atan2(p.x, p.z);
+      // 법선 벡터 (실린더 중심축에서 바깥쪽으로)
+      const nx = Math.sin(angle);
+      const nz = Math.cos(angle);
+
+      // 진행 방향 접선 벡터
+      let dx = 0;
+      let dy = -1;
+      let dz = 0;
+
+      if (i < count - 1) {
+        const next = pts[i + 1];
+        dx = next.x - p.x;
+        dy = next.y - p.y;
+        dz = next.z - p.z;
+      } else if (i > 0) {
+        const prev = pts[i - 1];
+        dx = p.x - prev.x;
+        dy = p.y - prev.y;
+        dz = p.z - prev.z;
+      }
+
+      // 측면(폭) 방향 벡터 w = n x dir
+      let wx = -nz * dy;
+      let wy = nz * dx - nx * dz;
+      let wz = nx * dy;
+
+      const len = Math.hypot(wx, wy, wz);
+      if (len > 0.0001) {
+        wx /= len;
+        wy /= len;
+        wz /= len;
+      } else {
+        wx = Math.cos(angle);
+        wy = 0;
+        wz = -Math.sin(angle);
+      }
+
+      // 좌/우 정점 계산 (실린더 표면에서 살짝 띄운 후 측면으로 확장)
+      const cx = p.x + nx * surfaceOffset;
+      const cy = p.y;
+      const cz = p.z + nz * surfaceOffset;
+
+      const idxLeft = i * 2;
+      const idxRight = i * 2 + 1;
+
+      positions[idxLeft * 3 + 0] = cx + wx * halfWidth;
+      positions[idxLeft * 3 + 1] = cy + wy * halfWidth;
+      positions[idxLeft * 3 + 2] = cz + wz * halfWidth;
+
+      positions[idxRight * 3 + 0] = cx - wx * halfWidth;
+      positions[idxRight * 3 + 1] = cy - wy * halfWidth;
+      positions[idxRight * 3 + 2] = cz - wz * halfWidth;
+    }
+
+    for (let i = 0; i < count - 1; i++) {
+      const a = i * 2;
+      const b = i * 2 + 1;
+      const c = (i + 1) * 2;
+      const d = (i + 1) * 2 + 1;
+
+      const idxOffset = i * 6;
+      indices[idxOffset + 0] = a;
+      indices[idxOffset + 1] = b;
+      indices[idxOffset + 2] = c;
+      indices[idxOffset + 3] = b;
+      indices[idxOffset + 4] = d;
+      indices[idxOffset + 5] = c;
+    }
+
+    if (!trail.mesh) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setIndex(new THREE.BufferAttribute(indices, 1));
+
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(trail.color),
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.renderOrder = 5;
+      this.trailGroup.add(mesh);
+      trail.mesh = mesh;
+    } else {
+      const geom = trail.mesh.geometry;
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setIndex(new THREE.BufferAttribute(indices, 1));
+      geom.attributes.position.needsUpdate = true;
+      if (geom.index) geom.index.needsUpdate = true;
+    }
+  }
+
+  /**
    * 카메라 줌 및 시점 초기화 (사다리 전체가 한눈에 보이는 상태로 복귀)
    */
   public resetView() {
@@ -729,6 +1043,7 @@ export class CylinderScene {
     this.isTopView = false;
     this.cylinderGroup.rotation.set(0, 0, 0);
     this.camera.position.set(0, 0, this.cameraDistance);
+    this.clearTrails();
   }
 
   /**
@@ -740,6 +1055,9 @@ export class CylinderScene {
 
     // 마블 메시 동기화
     this.syncMarbleMeshes();
+
+    // 네온 궤적 트레일 갱신
+    this.updateNeonTrails();
 
     // 하단 목적지(골) 스프라이트의 Z축 깊이에 따른 투명도 조절 (앞쪽은 선명, 뒤쪽은 은은하게)
     this.goalSprites.forEach((sprite) => {

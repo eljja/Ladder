@@ -22,7 +22,7 @@ export class BgmManager {
   private loadYouTubeApi() {
     if (typeof window === 'undefined') return;
 
-    if (window.YT && window.YT.Player) {
+    if (window.YT?.Player) {
       this.createPlayer();
       return;
     }

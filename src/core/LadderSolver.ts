@@ -68,7 +68,7 @@ export class LadderSolver {
   public static solveAll(ladder: CylinderLadder): LadderResult[] {
     const results: LadderResult[] = [];
     for (let i = 0; i < ladder.colCount; i++) {
-      results.push(this.solve(ladder, i));
+      results.push(LadderSolver.solve(ladder, i));
     }
     return results;
   }

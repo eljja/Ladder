@@ -63,7 +63,7 @@ export class MarbleMesh {
     ctx.font = 'bold 28px "Pretendard", "Noto Sans KR", sans-serif';
     ctx.fillStyle = '#ffffff';
 
-    const displayName = state.name.length > 8 ? state.name.slice(0, 7) + '…' : state.name;
+    const displayName = state.name.length > 8 ? `${state.name.slice(0, 7)}…` : state.name;
     ctx.fillText(displayName, 128, 40);
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -75,6 +75,7 @@ export class MarbleMesh {
     });
     const sprite = new THREE.Sprite(spriteMat);
     sprite.scale.set(1.4, 0.44, 1);
+    sprite.renderOrder = 10;
     return sprite;
   }
 
@@ -88,6 +89,12 @@ export class MarbleMesh {
     const z = r * Math.cos(angle);
 
     this.group.position.set(x, y, z);
+
+    // 이름표를 원통 바깥쪽(법선 r 방향)으로 +0.42 돌출시켜 사다리 선/기둥에 가려지지 않게 처리
+    const rOffset = 0.42;
+    const normX = Math.sin(angle);
+    const normZ = Math.cos(angle);
+    this.nameSprite.position.set(normX * rOffset, 0.28 + 0.35, normZ * rOffset);
 
     // Z축 앞/뒤 깊이에 따른 명암 및 투명도 조절 (앞쪽은 선명하고 밝게, 뒤쪽은 은은하게)
     const t = Math.max(0, Math.min(1, (z / Math.max(0.1, r) + 1) / 2)); // 0 (뒤) ~ 1 (앞)

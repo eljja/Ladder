@@ -2,10 +2,6 @@ export class SoundManager {
   private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
 
-  constructor() {
-    // User interaction will unlock AudioContext
-  }
-
   private initCtx() {
     if (!this.ctx) {
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;

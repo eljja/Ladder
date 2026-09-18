@@ -1,10 +1,12 @@
 import { bgmManager } from '../core/BgmManager';
 import type { CylinderLadder } from '../core/CylinderLadder';
+import { LadderSerializer } from '../core/LadderSerializer';
 import { LadderSolver } from '../core/LadderSolver';
 import type { MarbleRunner } from '../core/MarbleRunner';
 import { soundManager } from '../core/SoundManager';
 import { ConfettiManager } from '../render/Confetti';
-import type { CylinderScene } from '../render/CylinderScene';
+import type { CylinderScene, LadderTheme } from '../render/CylinderScene';
+import { VideoRecorder } from '../utils/VideoRecorder';
 
 export const BUILTIN_PRESETS: Record<string, { names: string; goals: string }> = {
   '점심 메뉴': {
@@ -41,6 +43,11 @@ export class LadderUI {
   private btnSavePreset!: HTMLButtonElement;
   private btnDeletePreset!: HTMLButtonElement;
 
+  private sltTheme!: HTMLSelectElement;
+  private btnToggleTrail!: HTMLButtonElement;
+  private btnToggleRecord!: HTMLButtonElement;
+  private btnShareUrl!: HTMLButtonElement;
+
   private btnStartSimul!: HTMLButtonElement;
   private btnModeToggle!: HTMLButtonElement;
   private btnReset!: HTMLButtonElement;
@@ -65,6 +72,9 @@ export class LadderUI {
   private btnRestartSame!: HTMLButtonElement;
   private btnCloseModal!: HTMLButtonElement;
 
+  private videoRecorder!: VideoRecorder;
+  private isAutoRecordEnabled: boolean = false;
+
   private activeResults: { name: string; goal: string; startCol: number }[] = [];
 
   constructor(ladder: CylinderLadder, runner: MarbleRunner, scene: CylinderScene) {
@@ -76,7 +86,11 @@ export class LadderUI {
     this.initElements();
     this.initPresets();
     this.bindEvents();
-    this.applyCurrentNamesAndGoals();
+
+    const loadedFromUrl = this.loadFromUrlHashIfExists();
+    if (!loadedFromUrl) {
+      this.applyCurrentNamesAndGoals();
+    }
   }
 
   private initElements() {
@@ -85,6 +99,11 @@ export class LadderUI {
     this.sltPreset = document.querySelector('#sltPreset')!;
     this.btnSavePreset = document.querySelector('#btnSavePreset')!;
     this.btnDeletePreset = document.querySelector('#btnDeletePreset')!;
+
+    this.sltTheme = document.querySelector('#sltTheme')!;
+    this.btnToggleTrail = document.querySelector('#btnToggleTrail')!;
+    this.btnToggleRecord = document.querySelector('#btnToggleRecord')!;
+    this.btnShareUrl = document.querySelector('#btnShareUrl')!;
 
     this.btnStartSimul = document.querySelector('#btnStartSimul')!;
     this.btnModeToggle = document.querySelector('#btnModeToggle')!;
@@ -109,6 +128,8 @@ export class LadderUI {
     this.btnNextRoundExclude = document.querySelector('#btnNextRoundExclude')!;
     this.btnRestartSame = document.querySelector('#btnRestartSame')!;
     this.btnCloseModal = document.querySelector('#btnCloseModal')!;
+
+    this.videoRecorder = new VideoRecorder(this.scene.canvas);
   }
 
   private initPresets() {
@@ -284,7 +305,6 @@ export class LadderUI {
       this.ladder.setTaperRatio(val);
       this.scene.buildCylinderStructure();
 
-
       let desc = '';
       if (Math.abs(val - 1.0) < 0.02) {
         desc = '1.00x (기본 원통형)';
@@ -383,6 +403,77 @@ export class LadderUI {
     this.btnToggleCamLock?.addEventListener('click', handleCamLockToggle);
     this.btnToggleCamLockSidebar?.addEventListener('click', handleCamLockToggle);
 
+    // 11-4. 3D 테마 스킨 전환
+    this.sltTheme?.addEventListener('change', () => {
+      const theme = this.sltTheme.value as LadderTheme;
+      this.scene.setTheme(theme);
+      const themeName =
+        theme === 'wooden' ? '클래식 우든 타워' : theme === 'space' ? '스페이스 코스믹' : '사이버펑크 네온';
+      this.showToast(`🎨 3D 테마: [${themeName}] 적용!`);
+    });
+
+    // 11-5. 네온 궤적 트레일 토글
+    this.btnToggleTrail?.addEventListener('click', () => {
+      const enabled = this.scene.toggleNeonTrail();
+      this.btnToggleTrail.classList.toggle('active', enabled);
+      this.btnToggleTrail.textContent = enabled ? '✨ 네온 트레일: ON' : '✨ 네온 트레일: OFF';
+      this.showToast(enabled ? '✨ 네온 궤적 라이트 트레일 활성화' : '✨ 네온 궤적 트레일 비활성화');
+    });
+
+    // 11-6. 자동 영상 녹화 토글
+    this.btnToggleRecord?.addEventListener('click', () => {
+      if (!VideoRecorder.isSupported()) {
+        this.showToast('⚠️ 현재 브라우저에서는 Canvas 녹화 API를 지원하지 않습니다.');
+        return;
+      }
+      this.isAutoRecordEnabled = !this.isAutoRecordEnabled;
+      this.btnToggleRecord.classList.toggle('active', this.isAutoRecordEnabled);
+      this.btnToggleRecord.textContent = this.isAutoRecordEnabled ? '📹 자동 녹화: ON' : '📹 자동 녹화: OFF';
+      this.showToast(
+        this.isAutoRecordEnabled
+          ? '📹 자동 녹화 활성: 경기 시작 시 자동 녹화되며 완료 시 파일로 다운로드됩니다.'
+          : '📹 자동 녹화 꺼짐'
+      );
+    });
+
+    // 11-7. 사다리 URL 링크 복사 및 공유
+    this.btnShareUrl?.addEventListener('click', () => {
+      const names = this.inNames.value
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const goals = this.inGoals.value
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const shareUrl = LadderSerializer.getShareUrl({
+        names,
+        goals,
+        bridges: this.ladder.bridges,
+        taperRatio: this.ladder.taperRatio,
+      });
+
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(shareUrl)
+          .then(() => {
+            this.showToast('🔗 사다리 링크가 복사되었습니다! 친구에게 공유해보세요.');
+          })
+          .catch(() => {
+            prompt('아래 사다리 링크를 복사하세요:', shareUrl);
+          });
+      } else {
+        prompt('아래 사다리 링크를 복사하세요:', shareUrl);
+      }
+    });
+
+    // 11-8. 경기 시작 시 자동 영상 녹화 시작
+    this.runner.addEventListener('start', () => {
+      if (this.isAutoRecordEnabled) {
+        this.videoRecorder.start();
+      }
+    });
+
     // 12. 골인 이벤트 리스너 (동시 출발 모드 시 골인 알림)
     this.runner.addEventListener('marbleGoal', (e: any) => {
       if (this.runner.mode === 'individual') return; // 개별 모드는 singleFinish에서 처리
@@ -391,7 +482,6 @@ export class LadderUI {
       const goalText = this.getGoalName(m.finalCol);
       this.showToast(`🏁 ${m.name} ➔ [${goalText}] 도착!`);
     });
-
 
     // 13. 개별 마블 완료 이벤트 (개별 모드에서는 결과를 바로 띄우지 않고 토스트 및 폭죽만)
     this.runner.addEventListener('singleFinish', (e: any) => {
@@ -410,6 +500,10 @@ export class LadderUI {
 
     // 14. 모든 마블 완료 이벤트 리스너 -> 모든 마블이 끝난 후에만 최종 결과 창 표시
     this.runner.addEventListener('allFinish', () => {
+      if (this.isAutoRecordEnabled && this.videoRecorder.isRecording) {
+        this.videoRecorder.stop();
+        this.showToast('🎬 경기 녹화 완료! 영상 파일이 곧 다운로드됩니다.');
+      }
       ConfettiManager.grandFinale();
       setTimeout(() => {
         this.showResultModal();
@@ -489,7 +583,7 @@ export class LadderUI {
     });
   }
 
-  public applyCurrentNamesAndGoals() {
+  public applyCurrentNamesAndGoals(preserveBridges: boolean = false) {
     const rawNames = this.inNames.value
       .split(/[,\n]/)
       .map((s) => s.trim())
@@ -508,8 +602,8 @@ export class LadderUI {
     // 1. 사다리 기둥 수 동기화
     this.ladder.setColCount(names.length);
 
-    // 2. 다리가 전혀 없으면 기본 랜덤 다리 생성
-    if (this.ladder.bridges.length === 0) {
+    // 2. 다리가 전혀 없으면 기본 랜덤 다리 생성 (preserveBridges가 아닐 때)
+    if (!preserveBridges && this.ladder.bridges.length === 0) {
       const density = parseFloat(this.sliderDensity.value);
       this.ladder.generateRandomBridges(density);
     }
@@ -523,10 +617,38 @@ export class LadderUI {
     this.runner.reset();
   }
 
+  /**
+   * URL 해시(#ladder=...)에 저장된 사다리 구성이 있으면 자동 로드
+   */
+  private loadFromUrlHashIfExists(): boolean {
+    const shared = LadderSerializer.readFromUrlHash();
+    if (!shared?.names || shared.names.length === 0) return false;
+
+    this.inNames.value = shared.names.join(', ');
+    this.inGoals.value = shared.goals.join(', ');
+    if (shared.taperRatio !== undefined) {
+      this.ladder.setTaperRatio(shared.taperRatio);
+      if (this.sliderTaper) this.sliderTaper.value = shared.taperRatio.toString();
+      if (this.valTaper) {
+        const val = shared.taperRatio;
+        let desc = '';
+        if (Math.abs(val - 1.0) < 0.02) desc = '1.00x (기본 원통형)';
+        else if (val < 0.98) desc = `${val.toFixed(2)}x (원뿔형: 아래 좁아짐)`;
+        else desc = `${val.toFixed(2)}x (역원뿔형: 아래 넓어짐)`;
+        this.valTaper.textContent = desc;
+      }
+    }
+    this.ladder.bridges = shared.bridges;
+    this.applyCurrentNamesAndGoals(true);
+    this.scene.rebuildBridges();
+    this.showToast('🔗 공유받은 사다리를 성공적으로 불러왔습니다!');
+    return true;
+  }
+
   private getGoalName(colIndex?: number): string {
     if (colIndex === undefined) return '';
     // 3D 씬 화면 바닥에 렌더링된 골 이름을 1순위로 사용하여 100% 일치 보장
-    if (this.scene && (this.scene as any).goalNames && (this.scene as any).goalNames[colIndex]) {
+    if (this.scene && (this.scene as any).goalNames?.[colIndex]) {
       return (this.scene as any).goalNames[colIndex];
     }
     const rawGoals = this.inGoals.value
@@ -590,9 +712,7 @@ export class LadderUI {
 
     this.closeResultModal();
     this.scene.resetView();
-    this.showToast(
-      `⏭️ [${winnerName}] ➔ [${winnerGoal || '당첨'}] 제외 완료! (남은 참가자: ${nextNames.length}명)`
-    );
+    this.showToast(`⏭️ [${winnerName}] ➔ [${winnerGoal || '당첨'}] 제외 완료! (남은 참가자: ${nextNames.length}명)`);
   }
 
   private showResultModal() {
@@ -608,7 +728,7 @@ export class LadderUI {
     let hasDuplicate = false;
     for (const sol of solutions) {
       const marble = this.runner.marbles.find((m) => m.startCol === sol.startCol);
-      const col = marble && marble.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
+      const col = marble?.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
       if (seenCols.has(col)) {
         hasDuplicate = true;
         break;
@@ -622,9 +742,7 @@ export class LadderUI {
 
       // 중복이 없으면 완주된 마블의 기둥을 쓰고, 중복 감지 시 솔버 결과로 100% 안전 보정
       const finalCol =
-        !hasDuplicate && marble && marble.isFinished && marble.finalCol !== undefined
-          ? marble.finalCol
-          : sol.finalCol;
+        !hasDuplicate && marble && marble.isFinished && marble.finalCol !== undefined ? marble.finalCol : sol.finalCol;
       const goal = this.getGoalName(finalCol);
 
       this.activeResults.push({ name, goal, startCol: sol.startCol });
