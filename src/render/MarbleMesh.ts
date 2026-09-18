@@ -1,29 +1,51 @@
 import * as THREE from 'three';
+import { AvatarManager } from '../core/AvatarManager';
 import type { MarbleState } from '../core/MarbleRunner';
 
 export class MarbleMesh {
   public group: THREE.Group;
   public sphereMesh: THREE.Mesh;
+  public selectionRingMesh: THREE.Mesh;
   public nameSprite: THREE.Sprite;
   public marbleId: number;
+  public isSelected: boolean = false;
+  private lastPos: THREE.Vector3 | null = null;
+  private marbleColor: string;
+  private marbleName: string;
 
   constructor(state: MarbleState) {
     this.marbleId = state.id;
+    this.marbleColor = state.color;
+    this.marbleName = state.name;
     this.group = new THREE.Group();
 
-    // 1. 구체 마블 메시
+    // 1. 구체 마블 메시 (아바타 텍스처 연동)
     const radius = 0.28;
-    const geom = new THREE.SphereGeometry(radius, 24, 24);
+    const geom = new THREE.SphereGeometry(radius, 28, 28);
+    const avatarTex = AvatarManager.getTexture(state.name, state.color);
+
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(state.color),
-      emissive: new THREE.Color(state.color),
-      emissiveIntensity: 0.35,
+      color: avatarTex ? 0xffffff : new THREE.Color(state.color),
+      map: avatarTex || null,
+      emissive: avatarTex ? new THREE.Color(0x333333) : new THREE.Color(state.color),
+      emissiveIntensity: avatarTex ? 0.2 : 0.35,
       roughness: 0.15,
-      metalness: 0.4,
+      metalness: 0.25,
     });
     this.sphereMesh = new THREE.Mesh(geom, mat);
     this.sphereMesh.castShadow = true;
     this.group.add(this.sphereMesh);
+
+    // 1-1. 선택 하이라이트 링 (골드 펄스 링)
+    const ringGeom = new THREE.TorusGeometry(0.38, 0.025, 12, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd700,
+      transparent: true,
+      opacity: 0.9,
+    });
+    this.selectionRingMesh = new THREE.Mesh(ringGeom, ringMat);
+    this.selectionRingMesh.visible = false;
+    this.group.add(this.selectionRingMesh);
 
     // 2. 이름표 / 이모지 스프라이트
     this.nameSprite = this.createNameSprite(state);
@@ -101,7 +123,35 @@ export class MarbleMesh {
     this.nameSprite.material.opacity = 0.3 + 0.7 * t;
     const mat = this.sphereMesh.material as THREE.MeshStandardMaterial;
     if (mat) {
-      mat.emissiveIntensity = 0.15 + 0.35 * t;
+      mat.emissiveIntensity = mat.map ? 0.1 + 0.2 * t : 0.15 + 0.35 * t;
+    }
+
+    // 3D 구르기 회전 연출 (실제 구슬이 굴러가듯이 얼굴과 함께 회전)
+    const currentPos = new THREE.Vector3(x, y, z);
+    if (this.lastPos && !state.isFinished && state.isActive) {
+      const delta = currentPos.clone().sub(this.lastPos);
+      const dist = delta.length();
+      if (dist > 0.001 && dist < 1.5) {
+        // 원통 표면 법선 벡터
+        const normal = new THREE.Vector3(normX, 0, normZ).normalize();
+        // 회전축 = 법선 x 이동변위 (진행 방향에 수직인 축으로 구름)
+        const rollAxis = new THREE.Vector3().crossVectors(normal, delta);
+        if (rollAxis.lengthSq() > 0.00001) {
+          rollAxis.normalize();
+          const rollAngle = dist / 0.28;
+          const q = new THREE.Quaternion().setFromAxisAngle(rollAxis, rollAngle);
+          this.sphereMesh.quaternion.premultiply(q);
+        }
+      }
+    }
+    this.lastPos = currentPos;
+
+    // 선택 하이라이트 링 애니메이션
+    if (this.isSelected && this.selectionRingMesh.visible) {
+      this.selectionRingMesh.position.set(normX * 0.1, 0, normZ * 0.1);
+      this.selectionRingMesh.lookAt(normX * 10, 0, normZ * 10);
+      const ringScale = 1.0 + 0.12 * Math.sin(Date.now() * 0.008);
+      this.selectionRingMesh.scale.set(ringScale, ringScale, ringScale);
     }
 
     // 완료 상태일 때 살짝 펄스 스케일 효과
@@ -113,9 +163,39 @@ export class MarbleMesh {
     }
   }
 
+  public setSelected(selected: boolean) {
+    this.isSelected = selected;
+    this.selectionRingMesh.visible = selected;
+  }
+
+  public updateAvatarTexture() {
+    const avatarTex = AvatarManager.getTexture(this.marbleName, this.marbleColor);
+    const mat = this.sphereMesh.material as THREE.MeshStandardMaterial;
+    if (avatarTex) {
+      mat.map = avatarTex;
+      mat.color.setHex(0xffffff);
+      mat.emissive.setHex(0x333333);
+      mat.emissiveIntensity = 0.2;
+      mat.needsUpdate = true;
+    } else {
+      mat.map = null;
+      mat.color.set(this.marbleColor);
+      mat.emissive.set(this.marbleColor);
+      mat.emissiveIntensity = 0.35;
+      mat.needsUpdate = true;
+    }
+  }
+
+  public resetRotation() {
+    this.sphereMesh.quaternion.identity();
+    this.lastPos = null;
+  }
+
   public destroy() {
     this.sphereMesh.geometry.dispose();
     (this.sphereMesh.material as THREE.Material).dispose();
+    this.selectionRingMesh.geometry.dispose();
+    (this.selectionRingMesh.material as THREE.Material).dispose();
     this.nameSprite.material.dispose();
   }
 }

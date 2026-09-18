@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { AvatarManager } from '../core/AvatarManager';
 import type { CylinderLadder, LadderBridge } from '../core/CylinderLadder';
-import type { MarbleRunner } from '../core/MarbleRunner';
+import type { MarbleRunner, MarbleState } from '../core/MarbleRunner';
 import { soundManager } from '../core/SoundManager';
 import { MarbleMesh } from './MarbleMesh';
 
@@ -142,6 +143,8 @@ export class CylinderScene {
   private goalSprites: THREE.Sprite[] = [];
   private coreMesh: THREE.Mesh | null = null;
   public onToast?: (msg: string) => void;
+  public selectedMarbleId: number | null = null;
+  public onMarbleSelect?: (state: MarbleState | null) => void;
 
   // 드래그로 다리 그리기 상태
   public isEditMode: boolean = true;
@@ -561,10 +564,14 @@ export class CylinderScene {
       }
 
       // 대기/준비 중일 때
-      // 1. 마블 클릭 검사 (개별 출발)
+      // 1. 마블 클릭 검사 (개별 모드일 때만 출발, 일반 모드일 때는 선택)
       const clickedMarble = this.raycastMarble();
       if (clickedMarble !== null) {
-        this.runner.startSingle(clickedMarble);
+        if (this.runner.mode === 'individual') {
+          this.runner.startSingle(clickedMarble);
+        } else {
+          this.selectMarble(clickedMarble);
+        }
         return;
       }
 
@@ -572,6 +579,7 @@ export class CylinderScene {
       if (!this.runner.isRunning) {
         const clickedBridgeId = this.raycastBridge();
         if (clickedBridgeId) {
+          this.selectMarble(null);
           this.ladder.removeBridge(clickedBridgeId);
           soundManager.playBridgeRemove();
           this.rebuildBridges();
@@ -582,13 +590,15 @@ export class CylinderScene {
       // 3. 기둥 표면 클릭 시 다리 그리기 시작 (경기 미진행 시만 허용)
       const railHit = this.raycastRail();
       if (railHit && this.isEditMode && !this.runner.isRunning) {
+        this.selectMarble(null);
         this.isDrawingBridge = true;
         this.drawStartCol = railHit.colIndex;
         this.drawStartY = railHit.ladderY;
         this.drawPointerStartX = e.clientX;
         this.drawPointerStartY = e.clientY;
       } else {
-        // 빈 공간 클릭 -> 실린더 수동 회전
+        // 빈 공간 클릭 -> 선택 해제 및 실린더 수동 회전
+        this.selectMarble(null);
         this.isDraggingToRotate = true;
       }
     });
@@ -752,6 +762,63 @@ export class CylinderScene {
     // 윈도우 리사이즈
     window.addEventListener('resize', () => {
       this.resize();
+    });
+
+    // 클립보드 이미지 붙여넣기 (Ctrl+V) -> 선택된 마블의 얼굴 아바타로 등록
+    window.addEventListener('paste', async (e: ClipboardEvent) => {
+      if (this.selectedMarbleId === null) return;
+      const targetMarble = this.runner.marbles.find((m) => m.id === this.selectedMarbleId);
+      if (!targetMarble) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile();
+          if (blob) {
+            e.preventDefault();
+            try {
+              const dataUrl = await AvatarManager.processImageBlob(blob);
+              AvatarManager.setAvatar(targetMarble.name, dataUrl);
+              const mm = this.marbleMeshes.get(targetMarble.id);
+              if (mm) {
+                mm.updateAvatarTexture();
+              }
+              soundManager.playBridgeAdd();
+              this.onToast?.(`📷 [${targetMarble.name}] 마블에 얼굴 사진이 등록되었습니다!`);
+            } catch (err) {
+              console.warn('Failed to process pasted image:', err);
+              this.onToast?.('⚠️ 이미지 처리 중 오류가 발생했습니다.');
+            }
+            break;
+          }
+        }
+      }
+    });
+
+    // Delete / Backspace 키로 선택된 마블의 얼굴 사진 삭제
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement as HTMLElement)?.tagName;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (this.selectedMarbleId !== null) {
+          const targetMarble = this.runner.marbles.find((m) => m.id === this.selectedMarbleId);
+          if (targetMarble && AvatarManager.getAvatar(targetMarble.name)) {
+            AvatarManager.removeAvatar(targetMarble.name);
+            const mm = this.marbleMeshes.get(targetMarble.id);
+            if (mm) {
+              mm.updateAvatarTexture();
+            }
+            soundManager.playBridgeRemove();
+            this.onToast?.(`🗑️ [${targetMarble.name}] 얼굴 사진이 삭제되었습니다.`);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        this.selectMarble(null);
+      }
     });
   }
 
@@ -1044,6 +1111,31 @@ export class CylinderScene {
     this.cylinderGroup.rotation.set(0, 0, 0);
     this.camera.position.set(0, 0, this.cameraDistance);
     this.clearTrails();
+    this.selectMarble(null);
+    for (const mm of this.marbleMeshes.values()) {
+      mm.resetRotation();
+    }
+  }
+
+  /**
+   * 특정 마블 선택 및 하이라이트 표시
+   */
+  public selectMarble(id: number | null) {
+    this.selectedMarbleId = id;
+    for (const [mid, mm] of this.marbleMeshes.entries()) {
+      mm.setSelected(mid === id);
+    }
+    const state = id !== null ? this.runner.marbles.find((m) => m.id === id) || null : null;
+    this.onMarbleSelect?.(state);
+  }
+
+  /**
+   * 모든 마블의 아바타 텍스처 갱신 (저장소 변경 시)
+   */
+  public refreshAllAvatars() {
+    for (const mm of this.marbleMeshes.values()) {
+      mm.updateAvatarTexture();
+    }
   }
 
   /**

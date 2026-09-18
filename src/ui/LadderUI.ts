@@ -1,3 +1,4 @@
+import { AvatarManager } from '../core/AvatarManager';
 import { bgmManager } from '../core/BgmManager';
 import type { CylinderLadder } from '../core/CylinderLadder';
 import { LadderSerializer } from '../core/LadderSerializer';
@@ -82,6 +83,16 @@ export class LadderUI {
     this.runner = runner;
     this.scene = scene;
     this.scene.onToast = (msg: string) => this.showToast(msg);
+    this.scene.onMarbleSelect = (state) => {
+      if (state) {
+        const hasAvatar = !!AvatarManager.getAvatar(state.name);
+        this.showToast(
+          hasAvatar
+            ? `👤 [${state.name}] 선택됨! (Ctrl+V로 사진 변경 / Del로 삭제)`
+            : `👤 [${state.name}] 선택됨! 사진 복사 후 Ctrl+V로 붙여넣으세요.`
+        );
+      }
+    };
 
     this.initElements();
     this.initPresets();
@@ -615,6 +626,7 @@ export class LadderUI {
     // 4. 러너 참가자 동기화
     this.runner.setParticipants(names);
     this.runner.reset();
+    this.scene.refreshAllAvatars();
   }
 
   /**
