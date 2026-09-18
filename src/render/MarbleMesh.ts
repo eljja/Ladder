@@ -124,7 +124,13 @@ export class MarbleMesh {
     this.nameSprite.material.opacity = 0.3 + 0.7 * t;
     const mat = this.sphereMesh.material as THREE.MeshStandardMaterial;
     if (mat) {
-      mat.emissiveIntensity = mat.map ? 0.1 + 0.2 * t : 0.15 + 0.35 * t;
+      mat.emissiveIntensity = mat.map ? 0.55 + 0.3 * t : 0.15 + 0.35 * t;
+    }
+
+    // 대기 중이거나 아직 출발하지 않았을 때:
+    // 로컬 +Z축에 위치한 앞면 얼굴이 실린더 바깥(r 방향)을 정면으로 완벽히 응시하도록 정렬
+    if (!state.isActive && !state.isFinished) {
+      this.sphereMesh.rotation.set(0, angle, 0);
     }
 
     // 3D 구르기 회전 연출 (실제 구슬이 굴러가듯이 얼굴과 함께 회전)
@@ -155,8 +161,10 @@ export class MarbleMesh {
       this.selectionRingMesh.scale.set(ringScale, ringScale, ringScale);
     }
 
-    // 완료 상태일 때 살짝 펄스 스케일 효과
+    // 완료 상태일 때 얼굴이 바깥(r 방향)을 향하도록 부드럽게 복귀 및 펄스 스케일 효과
     if (state.isFinished) {
+      const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+      this.sphereMesh.quaternion.slerp(targetQ, 0.08);
       const scale = 1.0 + 0.15 * Math.sin(Date.now() * 0.008);
       this.sphereMesh.scale.set(scale, scale, scale);
     } else {

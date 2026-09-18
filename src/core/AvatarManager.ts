@@ -50,18 +50,14 @@ export class AvatarManager {
   /**
    * 클립보드 Blob 또는 File을 받아 증명사진에 최적화된 스마트 크롭 & 160x160 원형 아바타로 DataURL 반환
    */
-  public static async processImageBlob(
-    blob: Blob,
-    zoom: number = 1.2,
-    offsetYRatio: number = 0.43
-  ): Promise<string> {
+  public static async processImageBlob(blob: Blob, zoom: number = 1.2, offsetYRatio: number = 0.43): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(blob);
       img.onload = () => {
         URL.revokeObjectURL(url);
         const canvas = document.createElement('canvas');
-        const size = 160;
+        const size = 320;
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d')!;
@@ -133,13 +129,13 @@ export class AvatarManager {
     if (cached) return cached;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = 512;
+    canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
 
     // 1. 기본 마블 배경색
     ctx.fillStyle = baseColor;
-    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillRect(0, 0, 512, 512);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace; // 표준 sRGB 컬러 스페이스 지정 (피부색 왜곡 방지)
@@ -152,7 +148,7 @@ export class AvatarManager {
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 8;
         ctx.strokeStyle = '#ffd700';
         ctx.stroke();
         ctx.clip();
@@ -161,10 +157,12 @@ export class AvatarManager {
         ctx.restore();
       };
 
-      // 앞면 (128, 128) 및 뒷면 (0/256) 모두에 얼굴 배치하여 360도 회전 시 어디서든 얼굴이 잘 보이도록 처리
-      drawFace(128, 128, 85);
-      drawFace(0, 128, 70);
-      drawFace(256, 128, 70);
+      // Three.js SphereGeometry UV 매핑:
+      // u = 0.25 (cx = 128) -> 로컬 +Z 축 (외경 법선 r 방향과 정렬되어 사용자를 정면으로 응시)
+      // u = 0.75 (cx = 384) -> 로컬 -Z 축 (반대편 내경)
+      // 텍스처 양쪽 끝 Seam(u=0, u=1)에 얼굴이 걸치지 않아 완전한 원형 얼굴이 바깥(r 방향)에서 가장 잘 보입니다.
+      drawFace(128, 256, 115);
+      drawFace(384, 256, 100);
 
       texture.needsUpdate = true;
     };
