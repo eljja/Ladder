@@ -273,6 +273,8 @@ export class LadderUI {
     this.btnStartSimul.addEventListener('click', () => {
       if (this.runner.isRunning) return;
       this.applyCurrentNamesAndGoals();
+      this.btnModeToggle.textContent = '🎯 개별 터치 모드';
+      this.btnModeToggle.classList.remove('active');
       this.runner.startSimultaneous();
       this.showToast('🚀 모든 마블 동시 출발!');
     });
@@ -316,7 +318,7 @@ export class LadderUI {
     this.sliderTaper?.addEventListener('input', () => {
       const val = parseFloat(this.sliderTaper.value);
       this.ladder.setTaperRatio(val);
-      this.scene.buildCylinderStructure();
+      this.scene.buildCylinderStructure(false);
 
       let desc = '';
       if (Math.abs(val - 1.0) < 0.02) {
@@ -334,7 +336,7 @@ export class LadderUI {
     this.btnResetTaper?.addEventListener('click', () => {
       this.sliderTaper.value = '1.0';
       this.ladder.setTaperRatio(1.0);
-      this.scene.buildCylinderStructure();
+      this.scene.buildCylinderStructure(false);
       if (this.valTaper) {
         this.valTaper.textContent = '1.00x (기본 원통형)';
       }
@@ -466,18 +468,11 @@ export class LadderUI {
         taperRatio: this.ladder.taperRatio,
       });
 
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard
-          .writeText(shareUrl)
-          .then(() => {
-            this.showToast('🔗 사다리 링크가 복사되었습니다! 친구에게 공유해보세요.');
-          })
-          .catch(() => {
-            prompt('아래 사다리 링크를 복사하세요:', shareUrl);
-          });
-      } else {
-        prompt('아래 사다리 링크를 복사하세요:', shareUrl);
-      }
+      this.copyToClipboard(
+        shareUrl,
+        '🔗 사다리 링크가 복사되었습니다! 친구에게 공유해보세요.',
+        '아래 사다리 링크를 복사하세요:'
+      );
     });
 
     // 11-8. 경기 시작 시 자동 영상 녹화 시작
@@ -531,9 +526,7 @@ export class LadderUI {
         lines.push(`${r.name} ➔ ${r.goal}`);
       });
       const text = lines.join('\n');
-      navigator.clipboard.writeText(text).then(() => {
-        this.showToast('📋 결과가 클립보드에 복사되었습니다!');
-      });
+      this.copyToClipboard(text, '📋 결과가 클립보드에 복사되었습니다!', '아래 결과를 복사하세요:');
     });
 
     // 16. 당첨자 제외하고 다음 판 (서바이벌 모드)
@@ -610,7 +603,12 @@ export class LadderUI {
       .split(/[,\n]/)
       .map((s) => s.trim())
       .filter(Boolean);
-    const names = rawNames.length > 0 ? rawNames : ['참가자1', '참가자2', '참가자3', '참가자4'];
+    const names =
+      rawNames.length >= 2
+        ? rawNames
+        : rawNames.length === 1
+          ? [rawNames[0], '빈 기둥']
+          : ['참가자1', '참가자2', '참가자3', '참가자4'];
 
     const rawGoals = this.inGoals.value
       .split(/[,\n]/)
@@ -700,8 +698,16 @@ export class LadderUI {
     // 1. 사다리에서 해당 기둥 제거 (가로선 한쪽 보존 및 남은 2개 사다리 연결 보장)
     this.ladder.removeColumn(startCol);
 
-    // 2. 참가자 명단에서 해당 참가자 제거
-    const nextNames = currentNames.filter((n) => n !== winnerName);
+    // 2. 참가자 명단에서 해당 열(startCol)의 참가자 1명만 제거 (동명이인 보호)
+    const nextNames = [...currentNames];
+    if (startCol >= 0 && startCol < nextNames.length && nextNames[startCol] === winnerName) {
+      nextNames.splice(startCol, 1);
+    } else {
+      const targetIdx = nextNames.indexOf(winnerName);
+      if (targetIdx >= 0) {
+        nextNames.splice(targetIdx, 1);
+      }
+    }
     this.inNames.value = nextNames.join(', ');
 
     // 3. 골 명단에서도 당첨자가 차지한 골(목적지) 제거하여 다음 라운드와 동기화
@@ -772,24 +778,73 @@ export class LadderUI {
 
       const item = document.createElement('div');
       item.className = 'result-item';
-      item.innerHTML = `
-        <div class="result-item-main">
-          <span class="res-name">${name}</span>
-          <span class="res-arrow">➔</span>
-          <span class="res-goal">${goal}</span>
-        </div>
-        <button type="button" class="btn-item-exclude" title="${name}님 제외하고 다음 판">제외</button>
-      `;
 
-      const btnExclude = item.querySelector('.btn-item-exclude') as HTMLButtonElement;
+      const mainDiv = document.createElement('div');
+      mainDiv.className = 'result-item-main';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'res-name';
+      nameSpan.textContent = name;
+
+      const arrowSpan = document.createElement('span');
+      arrowSpan.className = 'res-arrow';
+      arrowSpan.textContent = '➔';
+
+      const goalSpan = document.createElement('span');
+      goalSpan.className = 'res-goal';
+      goalSpan.textContent = goal;
+
+      mainDiv.appendChild(nameSpan);
+      mainDiv.appendChild(arrowSpan);
+      mainDiv.appendChild(goalSpan);
+
+      const btnExclude = document.createElement('button');
+      btnExclude.type = 'button';
+      btnExclude.className = 'btn-item-exclude';
+      btnExclude.title = `${name}님 제외하고 다음 판`;
+      btnExclude.textContent = '제외';
       btnExclude.addEventListener('click', () => {
         this.excludeParticipant(name, sol.startCol, goal);
       });
+
+      item.appendChild(mainDiv);
+      item.appendChild(btnExclude);
 
       this.resultList.appendChild(item);
     });
 
     this.resultModal.classList.remove('hide');
+  }
+
+  private copyToClipboard(text: string, successToast: string, fallbackPrompt: string) {
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) {
+          this.showToast(successToast);
+          return;
+        }
+      } catch {
+        // ignore and fall back to prompt
+      }
+      prompt(fallbackPrompt, text);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => this.showToast(successToast))
+        .catch(fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
   }
 
   private closeResultModal() {

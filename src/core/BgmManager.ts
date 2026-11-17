@@ -70,17 +70,23 @@ export class BgmManager {
             event.target.setVolume(this.volume);
             if (this.hasUserInteracted && !this.isMuted) {
               event.target.playVideo();
-              this.isPlaying = true;
             }
           },
           onStateChange: (event: any) => {
             // 0: Ended -> 재시작
             if (event.data === 0) {
-              this.player?.playVideo();
+              this.isPlaying = false;
+              if (!this.isMuted) {
+                this.player?.playVideo();
+              }
             }
             // 1: Playing
-            if (event.data === 1) {
+            else if (event.data === 1) {
               this.isPlaying = true;
+            }
+            // 2: Paused
+            else if (event.data === 2) {
+              this.isPlaying = false;
             }
           },
         },
@@ -104,11 +110,10 @@ export class BgmManager {
   }
 
   public play() {
+    this.isMuted = false;
     if (this.isReady && this.player?.playVideo) {
       this.player.setVolume(this.volume);
       this.player.playVideo();
-      this.isPlaying = true;
-      this.isMuted = false;
     }
   }
 

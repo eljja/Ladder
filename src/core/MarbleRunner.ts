@@ -97,7 +97,7 @@ export class MarbleRunner extends EventTarget {
    */
   public startSingle(marbleId: number) {
     const target = this.marbles.find((m) => m.id === marbleId);
-    if (!target || target.isFinished) return;
+    if (!target || target.isFinished || (this.mode === 'individual' && target.isActive)) return;
 
     this.mode = 'individual';
     this.singleActiveId = marbleId;
@@ -238,6 +238,12 @@ export class MarbleRunner extends EventTarget {
             m.finalCol = m.currentCol;
             soundManager.playGoal();
             this.dispatchEvent(new CustomEvent('marbleGoal', { detail: { marble: m } }));
+            if (this.mode === 'individual') {
+              if (this.singleActiveId === m.id) {
+                this.singleActiveId = null;
+              }
+              this.dispatchEvent(new CustomEvent('singleFinish', { detail: { marble: m } }));
+            }
           }
         }
       }
@@ -248,10 +254,6 @@ export class MarbleRunner extends EventTarget {
       const allFinished = this.marbles.every((m) => m.isFinished);
       if (allFinished) {
         this.dispatchEvent(new CustomEvent('allFinish'));
-      } else if (this.mode === 'individual') {
-        const finished = this.marbles.find((m) => m.id === this.singleActiveId);
-        this.singleActiveId = null;
-        this.dispatchEvent(new CustomEvent('singleFinish', { detail: { marble: finished } }));
       }
     }
   }

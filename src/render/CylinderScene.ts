@@ -132,7 +132,17 @@ export class CylinderScene {
   // 네온 궤적 라이트 트레일
   public isNeonTrailEnabled: boolean = true;
   private trailGroup: THREE.Group;
-  private marbleTrails: Map<number, { points: THREE.Vector3[]; mesh: THREE.Mesh | null; color: string }> = new Map();
+  private marbleTrails: Map<
+    number,
+    {
+      points: THREE.Vector3[];
+      mesh: THREE.Mesh | null;
+      color: string;
+      capacity: number;
+      positions: Float32Array;
+      indices: Uint16Array;
+    }
+  > = new Map();
 
   private marbleMeshes: Map<number, MarbleMesh> = new Map();
   private bridgeMeshes: Map<string, THREE.Mesh> = new Map();
@@ -271,7 +281,7 @@ export class CylinderScene {
   /**
    * 실린더 기둥 및 장식 재구축
    */
-  public buildCylinderStructure() {
+  public buildCylinderStructure(rebuildLabels: boolean = true) {
     // 기존 기둥 정리
     this.railMeshes.forEach((m) => {
       this.cylinderGroup.remove(m);
@@ -398,7 +408,11 @@ export class CylinderScene {
     this.cylinderGroup.add(this.botRingMesh);
 
     this.rebuildBridges();
-    this.updateGoalLabels();
+    if (rebuildLabels || this.goalSprites.length !== this.ladder.colCount) {
+      this.updateGoalLabels();
+    } else {
+      this.repositionGoalLabels();
+    }
     this.syncMarbleMeshes();
   }
 
@@ -481,6 +495,7 @@ export class CylinderScene {
   private updateGoalLabels() {
     this.goalSprites.forEach((s) => {
       this.cylinderGroup.remove(s);
+      s.material.map?.dispose();
       s.material.dispose();
     });
     this.goalSprites = [];
@@ -500,6 +515,16 @@ export class CylinderScene {
       sprite.position.set(x, y, z);
       this.cylinderGroup.add(sprite);
       this.goalSprites.push(sprite);
+    }
+  }
+
+  private repositionGoalLabels() {
+    const N = this.ladder.colCount;
+    const Rbot = this.ladder.radiusBottom;
+    const H = this.ladder.height;
+    for (let i = 0; i < N && i < this.goalSprites.length; i++) {
+      const angle = (i / N) * Math.PI * 2;
+      this.goalSprites[i].position.set((Rbot + 0.35) * Math.sin(angle), -H / 2 - 0.5, (Rbot + 0.35) * Math.cos(angle));
     }
   }
 
@@ -555,11 +580,15 @@ export class CylinderScene {
       this.prevPointerY = e.clientY;
 
       if (this.runner.isRunning) {
-        // 레이스 중에는 클릭으로 마블 출발(개별 모드) 또는 시점 수동 조작
-        const clickedMarble = this.raycastMarble();
-        if (clickedMarble !== null) {
-          this.runner.startSingle(clickedMarble);
+        // 개별 터치 모드 진행 중에만 마블 클릭으로 단독 출발 허용 (동시 출발 중 오클릭 리셋 방지)
+        if (this.runner.mode === 'individual') {
+          const clickedMarble = this.raycastMarble();
+          if (clickedMarble !== null) {
+            this.runner.startSingle(clickedMarble);
+            return;
+          }
         }
+        this.isDraggingToRotate = true;
         return;
       }
 
@@ -978,7 +1007,15 @@ export class CylinderScene {
 
       let trail = this.marbleTrails.get(m.id);
       if (!trail) {
-        trail = { points: [currentPos], mesh: null, color: m.color };
+        const initCap = 128;
+        trail = {
+          points: [currentPos],
+          mesh: null,
+          color: m.color,
+          capacity: initCap,
+          positions: new Float32Array(initCap * 2 * 3),
+          indices: new Uint16Array((initCap - 1) * 6),
+        };
         this.marbleTrails.set(m.id, trail);
       }
 
@@ -992,13 +1029,28 @@ export class CylinderScene {
     }
   }
 
-  private refreshTrailMesh(trail: { points: THREE.Vector3[]; mesh: THREE.Mesh | null; color: string }) {
+  private refreshTrailMesh(trail: {
+    points: THREE.Vector3[];
+    mesh: THREE.Mesh | null;
+    color: string;
+    capacity: number;
+    positions: Float32Array;
+    indices: Uint16Array;
+  }) {
     const pts = trail.points;
     const count = pts.length;
     if (count < 2) return;
 
-    const positions = new Float32Array(count * 2 * 3);
-    const indices = new Uint16Array((count - 1) * 6);
+    let resized = false;
+    if (count > trail.capacity) {
+      trail.capacity = Math.max(trail.capacity * 2, count + 64);
+      trail.positions = new Float32Array(trail.capacity * 2 * 3);
+      trail.indices = new Uint16Array((trail.capacity - 1) * 6);
+      resized = true;
+    }
+
+    const positions = trail.positions;
+    const indices = trail.indices;
     const halfWidth = 0.048;
     const surfaceOffset = 0.035;
 
@@ -1078,6 +1130,7 @@ export class CylinderScene {
       const geom = new THREE.BufferGeometry();
       geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geom.setIndex(new THREE.BufferAttribute(indices, 1));
+      geom.setDrawRange(0, (count - 1) * 6);
 
       const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(trail.color),
@@ -1093,8 +1146,11 @@ export class CylinderScene {
       trail.mesh = mesh;
     } else {
       const geom = trail.mesh.geometry;
-      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geom.setIndex(new THREE.BufferAttribute(indices, 1));
+      if (resized) {
+        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geom.setIndex(new THREE.BufferAttribute(indices, 1));
+      }
+      geom.setDrawRange(0, (count - 1) * 6);
       geom.attributes.position.needsUpdate = true;
       if (geom.index) geom.index.needsUpdate = true;
     }

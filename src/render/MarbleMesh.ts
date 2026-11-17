@@ -211,6 +211,7 @@ export class MarbleMesh {
     (this.sphereMesh.material as THREE.Material).dispose();
     this.selectionRingMesh.geometry.dispose();
     (this.selectionRingMesh.material as THREE.Material).dispose();
+    this.nameSprite.material.map?.dispose();
     this.nameSprite.material.dispose();
   }
 }
